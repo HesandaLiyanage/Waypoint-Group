@@ -1,0 +1,64 @@
+{
+  "app": {
+    "title": "Waypoint Operations",
+    "offline_badge": "Offline Mode",
+    "online_badge": "Connected",
+    "syncing_badge": "Syncing changes..."
+  },
+  "roles": {
+    "admin": "Administrator",
+    "dispatcher": "Dispatcher",
+    "field_agent": "Field Agent",
+    "driver": "Driver"
+  },
+  "shells": {
+    "admin": {
+      "title": "System Administration",
+      "overview": "Fleet & Operational Overview",
+      "user_management": "User Management",
+      "system_health": "System Diagnostics"
+    },
+    "dispatcher": {
+      "title": "Dispatch & Control",
+      "active_missions": "Active Missions",
+      "assign_task": "Assign Waypoint",
+      "route_optimizer": "Route Optimization"
+    },
+    "field_agent": {
+      "title": "Field Inspection",
+      "my_tasks": "My Field Tasks",
+      "record_finding": "Record Observation",
+      "offline_ready": "Data saved locally"
+    },
+    "driver": {
+      "title": "Driver Dashboard",
+      "current_stop": "Current Waypoint",
+      "navigate": "Start Navigation",
+      "complete_stop": "Complete Stop"
+    }
+  },
+  "sync": {
+    "pending_mutations": "Pending Offline Changes",
+    "last_synced": "Last synced",
+    "sync_now": "Sync Now",
+    "conflict_detected": "Sync conflict encountered"
+  },
+  "status": {
+    "pending": "Pending",
+    "assigned": "Assigned",
+    "in_progress": "In Progress",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "refresh": "Refresh",
+    "logout": "Log Out",
+    "search": "Search...",
+    "details": "Details",
+    "latitude": "Latitude",
+    "longitude": "Longitude"
+  }
+}

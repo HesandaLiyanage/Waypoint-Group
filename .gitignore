@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing and coverage
+coverage/
+*.lcov
+.nyc_output
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+out/
+
+# Go
+bin/
+vendor/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+
+# Environment variables & local configs
+.env
+.env.local
+.env.*.local
+*.pem
+
+# IDE & OS files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker / Local run data
+.docker/
+docker-data/
+*.log

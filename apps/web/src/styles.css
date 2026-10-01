@@ -1,0 +1,219 @@
+@import '@waypoint/design-tokens/css';
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  background-color: var(--wp-bg-base);
+  color: var(--wp-text-primary);
+  min-height: 100vh;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.15s ease-in-out;
+}
+
+input, select, textarea {
+  font-family: inherit;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.header {
+  background: var(--wp-bg-surface);
+  border-bottom: 1px solid var(--wp-border-subtle);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: var(--wp-shadow-sm);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--wp-color-primary);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--wp-radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-online {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.badge-offline {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.badge-syncing {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.colombo-clock {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  background: var(--wp-bg-subtle);
+  padding: 6px 12px;
+  border-radius: var(--wp-radius-md);
+  color: var(--wp-text-secondary);
+  border: 1px solid var(--wp-border-subtle);
+}
+
+.role-switcher {
+  display: flex;
+  background: var(--wp-bg-subtle);
+  border-radius: var(--wp-radius-md);
+  padding: 3px;
+  gap: 2px;
+}
+
+.role-btn {
+  padding: 6px 12px;
+  border-radius: var(--wp-radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--wp-text-secondary);
+  background: transparent;
+}
+
+.role-btn.active {
+  background: var(--wp-bg-surface);
+  color: var(--wp-text-primary);
+  font-weight: 700;
+  box-shadow: var(--wp-shadow-sm);
+}
+
+.lang-select {
+  padding: 6px 10px;
+  border-radius: var(--wp-radius-md);
+  border: 1px solid var(--wp-border-subtle);
+  background: var(--wp-bg-surface);
+  font-size: 0.85rem;
+}
+
+.shell-main {
+  flex: 1;
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.card {
+  background: var(--wp-bg-surface);
+  border-radius: var(--wp-radius-lg);
+  border: 1px solid var(--wp-border-subtle);
+  padding: 20px;
+  box-shadow: var(--wp-shadow-sm);
+  margin-bottom: 20px;
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.btn-primary {
+  background: var(--wp-color-primary);
+  color: white;
+  padding: 8px 16px;
+  border-radius: var(--wp-radius-md);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.btn-primary:hover {
+  background: var(--wp-color-primary-dark);
+}
+
+.btn-outline {
+  border: 1px solid var(--wp-border-strong);
+  background: white;
+  padding: 6px 12px;
+  border-radius: var(--wp-radius-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.status-chip {
+  padding: 3px 8px;
+  border-radius: var(--wp-radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-chip.pending { background: #fef3c7; color: #92400e; }
+.status-chip.assigned { background: #dbeafe; color: #1e40af; }
+.status-chip.in_progress { background: #f3e8ff; color: #6b21a8; }
+.status-chip.completed { background: #d1fae5; color: #065f46; }
+.status-chip.failed { background: #fee2e2; color: #991b1b; }
+
+.waypoint-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px;
+  border-bottom: 1px solid var(--wp-border-subtle);
+}
+
+.waypoint-item:last-child {
+  border-bottom: none;
+}

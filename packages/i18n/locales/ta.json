@@ -1,0 +1,64 @@
+{
+  "app": {
+    "title": "வேபாயிண்ட் செயல்பாடுகள்",
+    "offline_badge": "ஆஃப்லைன் பயன்முறை",
+    "online_badge": "இணைக்கப்பட்டது",
+    "syncing_badge": "ஒத்திசைக்கப்படுகிறது..."
+  },
+  "roles": {
+    "admin": "நிர்வாகி",
+    "dispatcher": "பணிப்பாளர்",
+    "field_agent": "களப் பணியாளர்",
+    "driver": "சாரதி"
+  },
+  "shells": {
+    "admin": {
+      "title": "அமைப்பு நிர்வாகம்",
+      "overview": "செயல்பாட்டு கண்ணோட்டம்",
+      "user_management": "பயனர் மேலாண்மை",
+      "system_health": "கணினி நிலை"
+    },
+    "dispatcher": {
+      "title": "பணி அனுப்புதல் மற்றும் கட்டுப்பாடு",
+      "active_missions": "செயலில் உள்ள பணிகள்",
+      "assign_task": "பணியை ஒதுக்கு",
+      "route_optimizer": "பாதை உகப்பாக்கம்"
+    },
+    "field_agent": {
+      "title": "கள ஆய்வு",
+      "my_tasks": "எனது பணிகள்",
+      "record_finding": "கண்டுபிடிப்பை பதிவு செய்க",
+      "offline_ready": "தரவு சேமிக்கப்பட்டது"
+    },
+    "driver": {
+      "title": "சாரதி பலகை",
+      "current_stop": "தற்போதைய நிறுத்தம்",
+      "navigate": "வழிசெலுத்தலைத் தொடங்கு",
+      "complete_stop": "நிறுத்தத்தை முடிக்கவும்"
+    }
+  },
+  "sync": {
+    "pending_mutations": "நிலுவையில் உள்ள மாற்றங்கள்",
+    "last_synced": "கடைசியாக ஒத்திசைக்கப்பட்டது",
+    "sync_now": "இப்போது ஒத்திசைக்கவும்",
+    "conflict_detected": "முரண்பாடு கண்டறியப்பட்டது"
+  },
+  "status": {
+    "pending": "நிலுவையில்",
+    "assigned": "ஒதுக்கப்பட்டது",
+    "in_progress": "செயலில்",
+    "completed": "முடிந்தது",
+    "failed": "தோல்வி",
+    "cancelled": "ரத்து செய்யப்பட்டது"
+  },
+  "common": {
+    "save": "சேமி",
+    "cancel": "ரத்துசெய்",
+    "refresh": "புதுப்பி",
+    "logout": "வெளியேறு",
+    "search": "தேடு...",
+    "details": "விவரங்கள்",
+    "latitude": "அட்சரேகை",
+    "longitude": "தீர்க்கரேகை"
+  }
+}

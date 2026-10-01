@@ -1,0 +1,64 @@
+:root {
+  /* Core Brand Colors */
+  --wp-color-primary: #2563eb;
+  --wp-color-primary-dark: #1d4ed8;
+  --wp-color-primary-light: #60a5fa;
+  --wp-color-secondary: #0f172a;
+
+  /* Surfaces and Backgrounds */
+  --wp-bg-base: #f8fafc;
+  --wp-bg-surface: #ffffff;
+  --wp-bg-subtle: #f1f5f9;
+  --wp-border-subtle: #e2e8f0;
+  --wp-border-strong: #cbd5e1;
+
+  /* Typography Colors */
+  --wp-text-primary: #0f172a;
+  --wp-text-secondary: #64748b;
+  --wp-text-muted: #94a3b8;
+  --wp-text-inverse: #ffffff;
+
+  /* Status Colors */
+  --wp-status-pending: #f59e0b;
+  --wp-status-assigned: #3b82f6;
+  --wp-status-in-progress: #8b5cf6;
+  --wp-status-completed: #10b981;
+  --wp-status-failed: #ef4444;
+  --wp-status-cancelled: #6b7280;
+
+  /* Role Shell Accent Themes */
+  --wp-role-admin-accent: #6366f1;
+  --wp-role-admin-bg: #eef2ff;
+  --wp-role-admin-text: #312e81;
+
+  --wp-role-dispatcher-accent: #0284c7;
+  --wp-role-dispatcher-bg: #e0f2fe;
+  --wp-role-dispatcher-text: #0369a1;
+
+  --wp-role-field-accent: #059669;
+  --wp-role-field-bg: #ecfdf5;
+  --wp-role-field-text: #065f46;
+
+  --wp-role-driver-accent: #d97706;
+  --wp-role-driver-bg: #fffbeb;
+  --wp-role-driver-text: #92400e;
+
+  /* Spacing */
+  --wp-space-xs: 4px;
+  --wp-space-sm: 8px;
+  --wp-space-md: 16px;
+  --wp-space-lg: 24px;
+  --wp-space-xl: 32px;
+  --wp-space-2xl: 48px;
+
+  /* Radii */
+  --wp-radius-sm: 4px;
+  --wp-radius-md: 8px;
+  --wp-radius-lg: 12px;
+  --wp-radius-full: 9999px;
+
+  /* Shadows */
+  --wp-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --wp-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --wp-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}

@@ -1,0 +1,23 @@
+{
+  "name": "waypoint-group",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Waypoint Group Monorepo - Modular Monolith API, ML Inference, and React PWA",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" --filter \"./packages/*\" run dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "cd apps/api && go run cmd/server/main.go",
+    "dev:ml": "cd apps/ml && uvicorn main:app --reload --port 8000",
+    "build": "pnpm --recursive run build",
+    "test": "pnpm --recursive run test",
+    "lint": "pnpm --recursive run lint",
+    "generate:client": "pnpm --filter @waypoint/api-client run generate",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  },
+  "packageManager": "pnpm@11.6.0"
+}

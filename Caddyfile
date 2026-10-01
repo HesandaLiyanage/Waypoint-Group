@@ -1,0 +1,45 @@
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	encode gzip zstd
+
+	# Logging
+	log {
+		output stdout
+		format console
+	}
+
+	# API routing to Go Modular Monolith
+	handle /api/* {
+		reverse_proxy api:8080 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# ML Inference service routing
+	handle /ml/* {
+		uri strip_prefix /ml
+		reverse_proxy ml:8000 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Frontend Vite React PWA routing
+	handle {
+		reverse_proxy web:3000 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+}

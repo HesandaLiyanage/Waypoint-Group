@@ -1,0 +1,576 @@
+openapi: 3.0.3
+info:
+  title: Waypoint Group API
+  version: 1.0.0
+  description: |
+    Core API contracts for Waypoint Group modular monolith and mobile/PWA clients.
+    Supports offline sync outbox processing, role-based operations, and ML integration.
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local Go Modular Monolith API
+  - url: /api/v1
+    description: Same-origin via Caddy Reverse Proxy
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      operationId: getHealth
+      tags:
+        - System
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /auth/login:
+    post:
+      summary: Authenticate user and obtain session token
+      operationId: login
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/me:
+    get:
+      summary: Get current authenticated user profile and permissions
+      operationId: getCurrentUser
+      tags:
+        - Auth
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /waypoints:
+    get:
+      summary: List operational waypoints / missions
+      operationId: listWaypoints
+      tags:
+        - Waypoints
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/WaypointStatus'
+        - name: assigned_role
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/UserRole'
+      responses:
+        '200':
+          description: List of waypoints
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Waypoint'
+
+    post:
+      summary: Create a new operational waypoint
+      operationId: createWaypoint
+      tags:
+        - Waypoints
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWaypointRequest'
+      responses:
+        '201':
+          description: Waypoint created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Waypoint'
+
+  /waypoints/{id}:
+    get:
+      summary: Get waypoint by ID
+      operationId: getWaypointById
+      tags:
+        - Waypoints
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Waypoint found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Waypoint'
+        '404':
+          description: Waypoint not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /waypoints/{id}/status:
+    patch:
+      summary: Update status of a waypoint
+      operationId: updateWaypointStatus
+      tags:
+        - Waypoints
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStatusRequest'
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Waypoint'
+
+  /sync/push:
+    post:
+      summary: Push a batch of offline outbox events to server
+      operationId: pushSyncEvents
+      tags:
+        - Sync
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncPushRequest'
+      responses:
+        '200':
+          description: Events processed and acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPushResponse'
+
+  /sync/pull:
+    get:
+      summary: Pull delta changes since given server sequence / timestamp
+      operationId: pullSyncEvents
+      tags:
+        - Sync
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: since_cursor
+          in: query
+          description: Server event cursor or epoch timestamp for delta sync
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Delta sync batch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPullResponse'
+
+  /ml/eta:
+    post:
+      summary: Predict estimated time of arrival using ML inference service
+      operationId: predictEta
+      tags:
+        - ML
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EtaPredictionRequest'
+      responses:
+        '200':
+          description: Calculated ETA inference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EtaPredictionResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+        - service
+      properties:
+        status:
+          type: string
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-10-01T06:00:00Z"
+        service:
+          type: string
+          example: waypoint-api
+        version:
+          type: string
+          example: 1.0.0
+
+    UserRole:
+      type: string
+      enum:
+        - admin
+        - dispatcher
+        - field_agent
+        - driver
+      description: The four distinct operational role shells in Waypoint
+
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - name
+        - role
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        phone:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required:
+        - token
+        - user
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+    WaypointStatus:
+      type: string
+      enum:
+        - pending
+        - assigned
+        - in_progress
+        - completed
+        - failed
+        - cancelled
+
+    Waypoint:
+      type: object
+      required:
+        - id
+        - title
+        - status
+        - latitude
+        - longitude
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/WaypointStatus'
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        assigned_to:
+          type: string
+          format: uuid
+          nullable: true
+        assigned_role:
+          $ref: '#/components/schemas/UserRole'
+          nullable: true
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateWaypointRequest:
+      type: object
+      required:
+        - title
+        - latitude
+        - longitude
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        assigned_to:
+          type: string
+          format: uuid
+        assigned_role:
+          $ref: '#/components/schemas/UserRole'
+        due_at:
+          type: string
+          format: date-time
+
+    UpdateStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/WaypointStatus'
+        notes:
+          type: string
+
+    SyncMutationType:
+      type: string
+      enum:
+        - CREATE
+        - UPDATE
+        - DELETE
+
+    SyncEvent:
+      type: object
+      required:
+        - event_id
+        - entity_type
+        - entity_id
+        - action
+        - payload
+        - client_timestamp
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        entity_type:
+          type: string
+          example: waypoint
+        entity_id:
+          type: string
+        action:
+          $ref: '#/components/schemas/SyncMutationType'
+        payload:
+          type: object
+          additionalProperties: true
+        client_timestamp:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          default: 1
+
+    SyncPushRequest:
+      type: object
+      required:
+        - client_id
+        - events
+      properties:
+        client_id:
+          type: string
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncEvent'
+
+    SyncAck:
+      type: object
+      required:
+        - event_id
+        - status
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [ACK, CONFLICT, ERROR]
+        error_message:
+          type: string
+
+    SyncPushResponse:
+      type: object
+      required:
+        - acks
+        - new_cursor
+      properties:
+        acks:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncAck'
+        new_cursor:
+          type: string
+
+    SyncPullResponse:
+      type: object
+      required:
+        - events
+        - next_cursor
+        - has_more
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncEvent'
+        next_cursor:
+          type: string
+        has_more:
+          type: boolean
+
+    EtaPredictionRequest:
+      type: object
+      required:
+        - origin_lat
+        - origin_lng
+        - destination_lat
+        - destination_lng
+      properties:
+        origin_lat:
+          type: number
+        origin_lng:
+          type: number
+        destination_lat:
+          type: number
+        destination_lng:
+          type: number
+        departure_time:
+          type: string
+          format: date-time
+
+    EtaPredictionResponse:
+      type: object
+      required:
+        - duration_minutes
+        - distance_km
+        - confidence_score
+      properties:
+        duration_minutes:
+          type: number
+        distance_km:
+          type: number
+        confidence_score:
+          type: number
+        estimated_arrival:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object

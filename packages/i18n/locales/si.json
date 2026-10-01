@@ -1,0 +1,64 @@
+{
+  "app": {
+    "title": "වේපොයින්ට් මෙහෙයුම්",
+    "offline_badge": "නොබැඳි මාදිලිය",
+    "online_badge": "සම්බන්ධයි",
+    "syncing_badge": "සමමුහුර්ත වෙමින් පවතී..."
+  },
+  "roles": {
+    "admin": "පරිපාලක",
+    "dispatcher": "ඩිස්පැචර්",
+    "field_agent": "ක්ෂේත්‍ර නිලධාරී",
+    "driver": "රියදුරු"
+  },
+  "shells": {
+    "admin": {
+      "title": "පද්ධති පරිපාලනය",
+      "overview": "මෙහෙයුම් දළ විශ්ලේෂණය",
+      "user_management": "පරිශීලක කළමනාකරණය",
+      "system_health": "පද්ධති තත්ත්වය"
+    },
+    "dispatcher": {
+      "title": "ඩිස්පැච් සහ පාලනය",
+      "active_missions": "ක්‍රියාකාරී මෙහෙයුම්",
+      "assign_task": "කාර්යය පවරන්න",
+      "route_optimizer": "මාර්ග ප්‍රශස්තකරණය"
+    },
+    "field_agent": {
+      "title": "ක්ෂේත්‍ර පරීක්ෂාව",
+      "my_tasks": "මගේ කාර්යයන්",
+      "record_finding": "නිරීක්ෂණ වාර්තා කරන්න",
+      "offline_ready": "දත්ත සුරැකිණි"
+    },
+    "driver": {
+      "title": "රියදුරු පුවරුව",
+      "current_stop": "වත්මන් නැවතුම",
+      "navigate": "යාත්‍රා කිරීම අරඹන්න",
+      "complete_stop": "නැවතුම සම්පූර්ණ කරන්න"
+    }
+  },
+  "sync": {
+    "pending_mutations": "සුරැකීමට ඇති වෙනස්කම්",
+    "last_synced": "අවසාන සමමුහුර්තය",
+    "sync_now": "දැන් සමමුහුර්ත කරන්න",
+    "conflict_detected": "ගැටුමක් හඳුනා ගැනිණි"
+  },
+  "status": {
+    "pending": "අපේක්ෂිත",
+    "assigned": "පවරා ඇත",
+    "in_progress": "ක්‍රියාත්මක වෙමින්",
+    "completed": "සම්පූර්ණයි",
+    "failed": "අසාර්ථකයි",
+    "cancelled": "අවලංගුයි"
+  },
+  "common": {
+    "save": "සුරකින්න",
+    "cancel": "අවලංගු කරන්න",
+    "refresh": "නැවුම් කරන්න",
+    "logout": "ඉවත් වන්න",
+    "search": "සොයන්න...",
+    "details": "තොරතුරු",
+    "latitude": "අක්ෂාංශය",
+    "longitude": "දේශාංශය"
+  }
+}
