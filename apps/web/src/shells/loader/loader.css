@@ -1,3 +1,5 @@
+/* Loader shell: mobile first, centred column on larger screens.
+   Every tappable control is at least 56px tall (Tech-Triathlon brief). */
 .ld-root { --ld-primary: var(--wp-ui-primary, #083e38); --ld-bg: #f4f7fb; --ld-border: #e1e8ef; --ld-text: #10202b; --ld-muted: #4a5a68; --ld-ok: #1b7f3b; --ld-ok-bg: #e2f5e8; --ld-warn: #9a5b00; --ld-warn-bg: #fff1d6; --ld-bad: #b42318; --ld-bad-bg: #fde7e4; --ld-info: #1d5fa8; --ld-info-bg: #e3eefa; --ld-chip: #eaf0f5;
   margin: -24px; background: #e8eef5; display: flex; justify-content: center; min-height: calc(100dvh - 80px); color: var(--ld-text); }
 .ld-phone { width: 100%; max-width: 480px; background: var(--ld-bg); display: flex; flex-direction: column; min-height: calc(100dvh - 80px); box-shadow: 0 0 0 1px var(--ld-border); }
@@ -100,3 +102,7 @@
 @media (min-width: 900px) { .ld-root { margin: -36px -32px; padding: 24px 0; } .ld-phone { border-radius: 20px; min-height: 0; overflow: clip; box-shadow: 0 8px 40px rgb(15 23 42 / 12%), 0 0 0 1px var(--ld-border); } .ld-actions, .ld-tabs { position: sticky; } }
 @media (max-width: 767px) { .ld-root { margin: -24px -16px; } }
 @media (prefers-reduced-motion: no-preference) { .ld-bar > span { transition: width .3s; } }
+.ld-demo-toggle { all: unset; box-sizing: border-box; cursor: pointer; min-height: 56px; padding: 0 14px; display: inline-flex; align-items: center; font-size: 13px; font-weight: 800; color: var(--ld-primary); text-decoration: underline; } .ld-demo-toggle[aria-pressed="true"] { color: var(--ld-warn); } .ld-demo-toggle:focus-visible { outline: 3px solid var(--wp-ui-accent, #0e707c); border-radius: 8px; }
+.ld-offline { margin: 8px 16px 0; display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 16px; background: var(--ld-warn-bg); border: 1px solid #f1d9a6; color: #5c3600; }
+.ld-offline strong { font-size: 18px; } .ld-offline p { font-size: 14px; margin: 4px 0 10px; line-height: 1.4; }
+.ld-offline-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: #fff; color: var(--ld-warn); flex: none; }

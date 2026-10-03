@@ -15,6 +15,7 @@ const paths: Record<string, ReactNode> = {
   snow: <path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5" />,
   box: <path d="M12 3l8.5 4.5v9L12 21l-8.5-4.5v-9zM3.5 7.5L12 12l8.5-4.5M12 12v9" />,
   xcircle: <><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></>,
+  wifioff: <><path d="M3 3l18 18" /><path d="M5.5 9.5a11 11 0 0 1 4-2M18.5 9.5a11 11 0 0 0-3.2-1.9M8.5 13a6.5 6.5 0 0 1 2.2-1.2M15.5 13a6.5 6.5 0 0 0-1.4-1" /><path d="M12 18.5v.1" /></>,
   lines: <path d="M5 7h14M5 12h9M5 17h5" />,
 };
 
