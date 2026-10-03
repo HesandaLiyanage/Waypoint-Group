@@ -5,6 +5,7 @@ export const UserRoleSchema = z.enum([
   'dispatcher',
   'field_agent',
   'driver',
+  'loader',
 ]);
 
 export const UserSchema = z.object({
