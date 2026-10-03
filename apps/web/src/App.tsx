@@ -8,6 +8,7 @@ import { AdminShell } from './shells/admin/AdminShell';
 import { DispatcherShell } from './shells/dispatcher/DispatcherShell';
 import { FieldAgentShell } from './shells/field/FieldAgentShell';
 import { DriverShell } from './shells/driver/DriverShell';
+import { LoaderShell } from './shells/loader/LoaderShell';
 
 const RoleRouter: React.FC = () => {
   const { activeRole } = useAuth();
@@ -22,6 +23,8 @@ const RoleRouter: React.FC = () => {
         return <FieldAgentShell />;
       case 'driver':
         return <DriverShell />;
+      case 'loader':
+        return <LoaderShell />;
       default:
         return <AdminShell />;
     }

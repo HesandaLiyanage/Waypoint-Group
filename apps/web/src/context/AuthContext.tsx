@@ -33,6 +33,14 @@ const mockRoleUsers: Record<UserRole, User> = {
     phone: '+94 77 123 4567',
     createdAt: new Date().toISOString(),
   },
+  loader: {
+    id: 'usr-0005-loader',
+    email: 'loader.peliyagoda@waypoint.local',
+    name: 'Peliyagoda Dock Loader',
+    role: 'loader',
+    phone: '+94 11 234 5680',
+    createdAt: new Date().toISOString(),
+  },
   driver: {
     id: 'usr-0004-driver',
     email: 'driver@waypoint.local',
@@ -47,6 +55,12 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeRole, setActiveRole] = useState<UserRole>(() => {
+    // Open the Loader view with http://localhost:3000/?role=loader
+    const fromUrl = new URLSearchParams(window.location.search).get('role') as UserRole | null;
+    if (fromUrl && fromUrl in mockRoleUsers) {
+      localStorage.setItem('wp_active_role', fromUrl);
+      return fromUrl;
+    }
     return (localStorage.getItem('wp_active_role') as UserRole) || 'admin';
   });
 
