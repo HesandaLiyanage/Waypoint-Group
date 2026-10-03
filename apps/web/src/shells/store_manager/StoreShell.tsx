@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { AuditsScreen } from './AuditsScreen';
+import { AuditsScreen, TelemetryScreen } from './AuditsScreen';
+import { ReceivedScreen } from './ReceivedScreen';
 import { ConfirmedScreen } from './ConfirmedScreen';
 import { ReceiptScreen } from './ReceiptScreen';
 import { ReportScreen } from './ReportScreen';
@@ -44,6 +45,8 @@ export function StoreShell() {
       {route === 'report' && <ReportScreen c={target} onSubmit={(t) => finish('issue', t)} />}
       {(route === 'confirmed' || route === 'reported') && <ConfirmedScreen r={receipt} />}
       {route === 'audits' && <AuditsScreen />}
+      {route === 'telemetry' && <TelemetryScreen />}
+      {route === 'received' && <ReceivedScreen r={receipt} />}
     </div>
   );
 }

@@ -1,15 +1,17 @@
 import { Card } from '../../components/common';
+export { StockAuditsScreen as AuditsScreen } from './StockAuditsScreen';
 import { Icon } from './icons';
 
-// Placeholder: the Figma set has no Stock Audits screen yet.
-export function AuditsScreen() {
+// Placeholder for tabs that have no screen in the Figma set yet.
+export function PlaceholderScreen({ title, text, icon = 'list' }: { title: string; text: string; icon?: string }) {
   return (
     <div className="sm-page sm-narrow">
       <Card className="sm-empty">
-        <span className="sm-iconbox"><Icon name="list" size={28} /></span>
-        <h1 className="sm-h1-md">Stock Audits</h1>
-        <p className="sm-muted">Cycle counts and audit history for OUT047 will appear here. This screen is not designed yet.</p>
+        <span className="sm-iconbox"><Icon name={icon} size={28} /></span>
+        <h1 className="sm-h1-md">{title}</h1>
+        <p className="sm-muted">{text}</p>
       </Card>
     </div>
   );
 }
+export const TelemetryScreen = () => <PlaceholderScreen icon="snow" title="Cold Chain Telemetry" text="Live temperature history for the outlet will appear here. This screen is not designed yet. Live delivery tracking is under Receiving Manifest." />;

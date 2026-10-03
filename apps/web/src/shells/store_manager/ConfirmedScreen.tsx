@@ -17,6 +17,7 @@ export function ConfirmedScreen({ r }: { r: ReceiptResult | null }) {
         <p className="sm-muted">{issue ? 'We have sent your report to the dispatch team.' : 'Thanks. Your receipt has been logged.'}</p>
         <div className="sm-chips"><span className="sm-chip"><Icon name="list" size={14} /> Manifest {r.orderId}</span>{issue && r.issue && <span className="sm-chip"><Icon name="alert" size={14} /> Issue type: {issueLabel[r.issue]}</span>}<span className="sm-chip"><Icon name="clock" size={14} /> {r.at}</span></div>
         <Button className="sm-wide" onClick={() => go('home')}><Icon name="archive" /> Back to home</Button>
+        {!issue && <button type="button" className="sm-link sm-center" onClick={() => go('received')}>View full receipt</button>}
       </Card>
       <div className="sm-two">
         {issue ? (<>

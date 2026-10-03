@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { NavigationItem } from '../../components/common';
+import { roleNavigation, type NavigationItem } from '../../components/common';
 
 // Hash routes for the Store manager: #/store_manager/<route>
-export type StoreRoute = 'home' | 'new-order' | 'inbound' | 'deferral' | 'track' | 'confirmed' | 'audits' | 'receipt' | 'report' | 'reported';
-const known: StoreRoute[] = ['home', 'new-order', 'inbound', 'deferral', 'track', 'confirmed', 'audits', 'receipt', 'report', 'reported'];
+export type StoreRoute = 'home' | 'new-order' | 'inbound' | 'deferral' | 'track' | 'confirmed' | 'audits' | 'receipt' | 'report' | 'reported' | 'telemetry' | 'received';
+const known: StoreRoute[] = ['home', 'new-order', 'inbound', 'deferral', 'track', 'confirmed', 'audits', 'receipt', 'report', 'reported', 'telemetry', 'received'];
 
 const parse = (): StoreRoute => {
   const m = window.location.hash.match(/^#\/store_manager\/([\w-]+)/);
@@ -20,12 +20,14 @@ export function useStoreRoute(): StoreRoute {
 }
 export const go = (route: StoreRoute) => { window.location.hash = `#/store_manager/${route}`; };
 
-// Her four header tabs (Figma). Home, order, inbound and confirmation live under "Receiving Manifest".
-export const storeNavigation: NavigationItem[] = [
-  { id: 'receiving', href: '#/store_manager/home', label: { en: 'Receiving Manifest', si: 'ලැබීමේ මැනිෆෙස්ට්', ta: 'பெறுதல் மேனிஃபெஸ்ட்' } },
-  { id: 'telemetry', href: '#/store_manager/track', label: { en: 'Cold Chain Telemetry', si: 'ශීත දාම ටෙලිමෙට්‍රි', ta: 'குளிர் சங்கிலி டெலிமெட்ரி' } },
-  { id: 'exceptions', href: '#/store_manager/deferral', label: { en: 'Exceptions & Shortages', si: 'ව්‍යතිරේක සහ හිඟකම්', ta: 'விதிவிலக்குகள் & பற்றாக்குறைகள்' } },
-  { id: 'audits', href: '#/store_manager/audits', label: { en: 'Stock Audits', si: 'තොග විගණන', ta: 'இருப்பு தணிக்கைகள்' } },
-];
-export const storeActiveId = (route: StoreRoute): string =>
-  route === 'track' ? 'telemetry' : route === 'deferral' || route === 'report' || route === 'reported' ? 'exceptions' : route === 'audits' ? 'audits' : 'receiving';
+// The four header tabs live in components/common/navigation.ts (single source for the whole app).
+export const storeNavigation: NavigationItem[] = roleNavigation.store_manager;
+// The highlighted tab follows the page (her Figma left it on "Receiving Manifest" everywhere).
+export const storeActiveId = (route: StoreRoute): string => {
+  switch (route) {
+    case 'track': case 'telemetry': return 'telemetry';
+    case 'deferral': case 'report': case 'reported': return 'exceptions';
+    case 'audits': return 'audits';
+    default: return 'receiving'; // home, new-order, inbound, receipt, confirmed, received
+  }
+};

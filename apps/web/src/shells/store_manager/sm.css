@@ -108,3 +108,9 @@
   .sm-table-wrap, .sm-table tr, .sm-detail-head, .sm-section-title, .sm-order, .sm-statusline, .wp-alert, .wp-card { break-inside: avoid; page-break-inside: avoid; }
   .sm-section-title, h1, h2, h3 { break-after: avoid; }
 }
+.sm-recgrid { display: grid; grid-template-columns: 1fr; gap: 10px; width: 100%; text-align: left; padding: 12px; border-radius: 14px; background: #eef3fb; } @media (min-width: 700px) { .sm-recgrid { grid-template-columns: 1fr 1fr; } }
+.sm-recgrid > div { display: flex; flex-direction: column; gap: 3px; padding: 12px; border-radius: 12px; background: #fff; } .sm-recgrid small, .sm-three small { font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: var(--sm-muted); display: block; } .sm-recgrid strong { font-size: 18px; }
+.sm-ver { background: #7ff0c4; color: #0b4a3a; font-size: 11px; padding: 2px 8px; border-radius: 6px; vertical-align: middle; }
+.sm-three { display: grid; grid-template-columns: 1fr; gap: 12px; } @media (min-width: 800px) { .sm-three { grid-template-columns: repeat(3, 1fr); } }
+.sm-count { width: 80px; min-height: 44px; border: 1px solid var(--sm-border); border-radius: 10px; padding: 0 10px; font: inherit; font-weight: 700; text-align: center; } .sm-count:focus-visible { outline: 3px solid var(--sm-accent); }
+.sm-list li.sm-cons { cursor: default; }

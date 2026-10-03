@@ -21,5 +21,11 @@ export const roleNavigation: Record<OperationalRole, NavigationItem[]> = {
   ],
   loader: [item('loader', 'trips', 'Trips', 'ගමන් වාර', 'பயணங்கள்'), item('loader', 'loading', 'Loading', 'පැටවීම', 'ஏற்றுதல்'), item('loader', 'issues', 'Issues', 'ගැටලු', 'சிக்கல்கள்')],
   driver: [item('driver', 'route', 'My Route', 'මගේ මාර්ගය', 'எனது பாதை'), item('driver', 'stop', 'Current Stop', 'වත්මන් නැවතුම', 'தற்போதைய நிறுத்தம்'), item('driver', 'issues', 'Issues', 'ගැටලු', 'சிக்கல்கள்')],
-  store_manager: [item('store_manager', 'home', 'Home', 'මුල් පිටුව', 'முகப்பு'), item('store_manager', 'orders', 'My Orders', 'මගේ ඇණවුම්', 'எனது ஆர்டர்கள்'), item('store_manager', 'deliveries', 'Deliveries', 'බෙදාහැරීම්', 'விநியோகங்கள்')],
+  // Store manager header: four tabs. Telemetry opens live delivery tracking; Exceptions opens the deferral notice.
+  store_manager: [
+    { id: 'receiving', href: '#/store_manager/home', label: { en: 'Receiving Manifest', si: 'ලැබීමේ මැනිෆෙස්ට්', ta: 'பெறுதல் மேனிஃபெஸ்ட்' } },
+    { id: 'telemetry', href: '#/store_manager/track', label: { en: 'Cold Chain Telemetry', si: 'ශීත දාම ටෙලිමෙට්‍රි', ta: 'குளிர் சங்கிலி டெலிமெட்ரி' } },
+    { id: 'exceptions', href: '#/store_manager/deferral', label: { en: 'Exceptions & Shortages', si: 'ව්‍යතිරේක සහ හිඟකම්', ta: 'விதிவிலக்குகள் & பற்றாக்குறைகள்' } },
+    { id: 'audits', href: '#/store_manager/audits', label: { en: 'Stock Audits', si: 'තොග විගණන', ta: 'இருப்பு தணிக்கைகள்' } },
+  ],
 };
