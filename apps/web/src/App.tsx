@@ -12,12 +12,13 @@ import { DriverShell } from './shells/driver/DriverShell';
 const RoleRouter: React.FC = () => {
   const { activeRole } = useAuth();
 
+  // Dispatcher frontend is independent of the legacy waypoint sync provider.
+  if (activeRole === 'dispatcher') return <DispatcherShell />;
+
   const renderShell = () => {
     switch (activeRole) {
       case 'admin':
         return <AdminShell />;
-      case 'dispatcher':
-        return <DispatcherShell />;
       case 'field_agent':
         return <FieldAgentShell />;
       case 'driver':
@@ -28,12 +29,12 @@ const RoleRouter: React.FC = () => {
   };
 
   return (
-    <div className="app-container">
+    <SyncProvider><div className="app-container">
       <a className="wp-skip-link" href="#main-content">Skip to content</a>
       <ShellHeader />
       <main id="main-content" className="shell-main" tabIndex={-1}>{renderShell()}</main>
       <AppFooter />
-    </div>
+    </div></SyncProvider>
   );
 };
 
@@ -41,9 +42,7 @@ export const App: React.FC = () => {
   return (
     <I18nProvider>
       <AuthProvider>
-        <SyncProvider>
-          <RoleRouter />
-        </SyncProvider>
+        <RoleRouter />
       </AuthProvider>
     </I18nProvider>
   );
