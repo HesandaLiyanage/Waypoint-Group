@@ -16,7 +16,10 @@ const clock = () => new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 
 
 export function LoaderShell() {
   const { locale } = useI18n();
-  const { isOnline } = useSync();
+  const { isOnline: netOnline } = useSync();
+  // "Go offline" button simulates a lost connection for the demo; the real browser state also counts.
+  const [simOffline, setSimOffline] = useState(false);
+  const isOnline = netOnline && !simOffline;
   const [trips, setTrips] = useState<Trip[]>(initialTrips);
   const [activeId, setActiveId] = useState('VEH014');
   const [screen, setScreen] = useState<Screen>('trips');
@@ -83,11 +86,21 @@ export function LoaderShell() {
       <div className="ld-phone">
         <div className="ld-status" aria-live="polite">
           <span className={`ld-pill ${sync.syncing ? 'is-syncing' : sync.queued ? 'is-queued' : 'is-synced'}`}>
-            <Icon name="check" size={16} /> {sync.syncing ? `Syncing ${sync.syncing}` : sync.queued ? `Queued ${sync.queued}` : 'Synced'}
+            <Icon name="check" size={16} /> {sync.syncing ? `Syncing ${sync.syncing}` : sync.queued ? (isOnline ? `Queued ${sync.queued}` : `Saved on device ${sync.queued}`) : 'Synced'}
           </span>
-          {!isOnline && <span className="ld-pill is-queued">Offline · saved on device</span>}
+          <button type="button" className="ld-demo-toggle" aria-pressed={simOffline} onClick={() => setSimOffline((v) => !v)}>{simOffline ? 'Back online (demo)' : 'Go offline (demo)'}</button>
           {justFlagged && <span className="ld-pill is-info">Shortage sent to dispatcher</span>}
         </div>
+        {!isOnline && (
+          <div className="ld-offline" role="status">
+            <span className="ld-offline-icon"><Icon name="wifioff" size={26} /></span>
+            <div>
+              <strong>You are offline</strong>
+              <p>Keep loading. Every check and shortage is saved on this device and sends by itself when you are back online.</p>
+              <div className="ld-chips"><span className="ld-pill is-queued">{sync.queued} saved on device</span><span className="ld-pill">Last synced {lastSynced}</span></div>
+            </div>
+          </div>
+        )}
         {screen === 'trips' && <TripsScreen trips={trips} sealed={sealed} planState={planState} lastSynced={lastSynced} activeTrip={activeForHome} onOpen={openTrip} />}
         {screen === 'loading' && <StopSequenceScreen trip={trip} sync={sync} expandedSeq={expandedSeq} onExpand={(q) => setExpandedSeq(expandedSeq === q ? -1 : q)} onBack={() => setScreen('trips')} onToggle={toggleItem} onFlag={startFlag} onFlagButton={flagButton} onReview={() => setScreen('ready')} />}
         {screen === 'flag' && <FlagShortageScreen key={flagItem.id} trip={trip} stopSeq={flagStop.seq} stopOutlet={flagStop.outlet} stopName={flagStop.name} item={flagItem} onBack={() => setScreen('loading')} onSend={sendFlag} />}
