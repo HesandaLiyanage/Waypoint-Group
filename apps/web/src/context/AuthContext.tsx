@@ -41,6 +41,14 @@ const mockRoleUsers: Record<UserRole, User> = {
     phone: '+94 11 234 5680',
     createdAt: new Date().toISOString(),
   },
+  store_manager: {
+    id: 'usr-0006-store',
+    email: 'store.fresh001@waypoint.local',
+    name: 'Store Manager OUT047',
+    role: 'store_manager',
+    phone: '+94 11 234 5681',
+    createdAt: new Date().toISOString(),
+  },
   driver: {
     id: 'usr-0004-driver',
     email: 'driver@waypoint.local',
