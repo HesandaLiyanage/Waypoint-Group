@@ -2,6 +2,7 @@ import React from 'react';
 import { I18nProvider } from './context/I18nContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SyncProvider } from './context/SyncContext';
+import { AppFooter } from './components/common';
 import { ShellHeader } from './components/ShellHeader';
 import { AdminShell } from './shells/admin/AdminShell';
 import { DispatcherShell } from './shells/dispatcher/DispatcherShell';
@@ -28,8 +29,10 @@ const RoleRouter: React.FC = () => {
 
   return (
     <div className="app-container">
+      <a className="wp-skip-link" href="#main-content">Skip to content</a>
       <ShellHeader />
-      <main className="shell-main">{renderShell()}</main>
+      <main id="main-content" className="shell-main" tabIndex={-1}>{renderShell()}</main>
+      <AppFooter />
     </div>
   );
 };
