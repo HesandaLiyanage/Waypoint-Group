@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite --port 3000 --host",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:components": "tsc --noEmit -p tsconfig.components.json"
   },
   "dependencies": {
+    "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "@waypoint/api-client": "workspace:*",
     "@waypoint/design-tokens": "workspace:*",
     "@waypoint/domain": "workspace:*",
