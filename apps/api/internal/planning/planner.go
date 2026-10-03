@@ -214,10 +214,12 @@ func Plan(
 			vTripsCount := 0
 			var trip1Depart time.Time
 			var trip1DurationMin int
+			var trip1District string
 			for _, t := range plan.Trips {
 				if t.VehicleID == veh.VehicleID {
 					vTripsCount++
 					trip1Depart = t.PlannedDepart
+					trip1District = t.District
 					dtKey := fmt.Sprintf("%s:%s", t.District, depot)
 					dt := ref.DistrictTravel[dtKey]
 					var allowances []int
@@ -272,8 +274,8 @@ func Plan(
 					plannedDepart = defaultStyleTechDepart
 				}
 			} else {
-				// Trip 2 departure: Trip 1 ends + return leg + reload buffer (Section 5.7)
-				dtKey := fmt.Sprintf("%s:%s", district, depot)
+				// Trip 2 departure: Trip 1 ends + return leg from Trip 1's district + reload buffer (Section 5.7)
+				dtKey := fmt.Sprintf("%s:%s", trip1District, depot)
 				dt := ref.DistrictTravel[dtKey]
 				plannedDepart = trip1Depart.Add(time.Duration(trip1DurationMin+dt.DepotToDistrictFreeflowMin+reloadBufferMin) * time.Minute)
 			}

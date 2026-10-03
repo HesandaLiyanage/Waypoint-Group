@@ -236,6 +236,7 @@ CREATE TABLE IF NOT EXISTS stop_receipts (
     stop_id UUID PRIMARY KEY REFERENCES trip_stops(id) ON DELETE CASCADE,
     code_salt VARCHAR(64) NOT NULL,
     code_hash VARCHAR(64) NOT NULL,
+    receipt_code VARCHAR(10),
     issued_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

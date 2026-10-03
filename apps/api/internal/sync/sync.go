@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/ordering"
 	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/auth"
 	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/clock"
 	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/outbox"
@@ -196,6 +197,26 @@ func (s *SyncService) processSingleEvent(
 					SET status = $1, confirmed_at = $2
 					WHERE id = (SELECT order_id FROM trip_stops WHERE id = $3)
 				`, status, serverTs, *evt.StopID)
+
+				// Verify 6-digit PoD receipt code if provided
+				if codeVal, hasCode := evt.Payload["receipt_code"]; hasCode {
+					if codeStr, ok := codeVal.(string); ok && codeStr != "" {
+						var salt, hash string
+						err := tx.QueryRow(ctx, `SELECT code_salt, code_hash FROM stop_receipts WHERE stop_id = $1`, *evt.StopID).Scan(&salt, &hash)
+						if err == nil {
+							if !ordering.VerifyReceiptCode(codeStr, salt, hash) {
+								detailJSON, _ := json.Marshal(map[string]interface{}{
+									"reason":        "PoD receipt code HMAC mismatch",
+									"code_entered":  codeStr,
+								})
+								_, _ = tx.Exec(ctx, `
+									INSERT INTO issues (kind, stop_id, raised_by, raised_role, status, detail, created_at)
+									VALUES ('POD_INVALID_CODE', $1, $2, 'driver', 'open', $3, $4)
+								`, evt.StopID, actor.ID, detailJSON, serverTs)
+							}
+						}
+					}
+				}
 			}
 
 			s.recomputeDownstreamETAs(ctx, tx, *evt.StopID, serverTs)

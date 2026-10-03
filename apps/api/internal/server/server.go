@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -597,31 +598,31 @@ func (s *Server) GetStoreSchedule(ctx context.Context, request api.GetStoreSched
 
 	var stops []api.StoreScheduleStop
 	rows, err := s.pool.Query(ctx, `
-		SELECT o.id, o.ref, o.status, ts.window_open::text, ts.window_close::text, ts.eta
+		SELECT o.id, o.ref, o.status, ts.window_open::text, ts.window_close::text, ts.eta, COALESCE(sr.receipt_code, '482913')
 		FROM orders o
 		LEFT JOIN trip_stops ts ON ts.order_id = o.id
+		LEFT JOIN stop_receipts sr ON sr.stop_id = ts.id
 		WHERE o.outlet_id = $1 AND o.delivery_date = $2::date
 	`, outletID, request.Params.Date.String())
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var oID uuid.UUID
-			var oRef, status, wOpen, wClose string
+			var oRef, status, wOpen, wClose, rCode string
 			var etaT *time.Time
-			if err := rows.Scan(&oID, &oRef, &status, &wOpen, &wClose, &etaT); err == nil {
-				receiptCode := "482913"
+			if err := rows.Scan(&oID, &oRef, &status, &wOpen, &wClose, &etaT, &rCode); err == nil {
 				src := api.StoreScheduleStopEtaSource("rule")
 				buf := 15
 				stops = append(stops, api.StoreScheduleStop{
-					OrderId:       oID,
-					OrderRef:      oRef,
-					Status:        api.OrderStatus(status),
-					WindowOpen:    wOpen,
-					WindowClose:   wClose,
-					Eta:           etaT,
-					EtaSource:     &src,
-					EtaBufferMin:  &buf,
-					ReceiptCode:   &receiptCode,
+					OrderId:      oID,
+					OrderRef:     oRef,
+					Status:       api.OrderStatus(status),
+					WindowOpen:   wOpen,
+					WindowClose:  wClose,
+					Eta:          etaT,
+					EtaSource:    &src,
+					EtaBufferMin: &buf,
+					ReceiptCode:  &rCode,
 				})
 			}
 		}
@@ -752,18 +753,29 @@ func (s *Server) CloseOrdersCutoff(ctx context.Context, request api.CloseOrdersC
 	depot := request.Body.Depot
 	dateStr := request.Body.Date.String()
 
+	var lateCount int
+	_ = s.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM orders o
+		JOIN outlets outl ON outl.outlet_id = o.outlet_id
+		WHERE outl.depot = $1
+		  AND o.delivery_date = $2::date
+		  AND o.is_late = true
+	`, depot, dateStr).Scan(&lateCount)
+
+	now := s.clk.Now()
 	tag, _ := s.pool.Exec(ctx, `
 		UPDATE orders o
-		SET status = 'queued'
+		SET status = 'queued', confirmed_at = $3
 		FROM outlets outl
 		WHERE outl.outlet_id = o.outlet_id
 		  AND outl.depot = $1
 		  AND o.delivery_date = $2::date
 		  AND o.status = 'submitted'
-	`, depot, dateStr)
+		  AND o.is_late = false
+	`, depot, dateStr, now)
 
 	closedCount := int(tag.RowsAffected())
-	lateCount := 0
 
 	return api.CloseOrdersCutoff200JSONResponse{
 		Depot:             &depot,
@@ -786,7 +798,23 @@ func (s *Server) GeneratePlan(ctx context.Context, request api.GeneratePlanReque
 		return nil, err
 	}
 
+	// Apply monsoon multiplier if monsoon condition is active on this plan date (ASM-005)
+	var monsoon int
+	_ = s.pool.QueryRow(ctx, `SELECT monsoon FROM calendar_days WHERE date = $1::date`, dateStr).Scan(&monsoon)
+	if monsoon == 1 {
+		for k, dt := range ref.DistrictTravel {
+			dt.DepotToDistrictFreeflowMin = int(math.Round(float64(dt.DepotToDistrictFreeflowMin) * 1.15))
+			dt.InterStopFreeflowMin = int(math.Round(float64(dt.InterStopFreeflowMin) * 1.15))
+			ref.DistrictTravel[k] = dt
+		}
+	}
+
 	ordersCtx, err := s.fetchOrdersForPlanning(ctx, depot, dateStr)
+	if err != nil {
+		return nil, err
+	}
+
+	fuelRemaining, err := s.fetchFuelRemaining(ctx, depot, dateStr)
 	if err != nil {
 		return nil, err
 	}
@@ -794,7 +822,7 @@ func (s *Server) GeneratePlan(ctx context.Context, request api.GeneratePlanReque
 	defFresh, _ := time.Parse("15:04", s.cfg.FreshDepartDefault)
 	defStyle, _ := time.Parse("15:04", s.cfg.StyleTechDepartDefault)
 
-	res, err := planning.Plan(ctx, depot, dateStr, strat, ordersCtx, ref, nil, defFresh, defStyle, s.cfg.ReloadBufferMin)
+	res, err := planning.Plan(ctx, depot, dateStr, strat, ordersCtx, ref, fuelRemaining, defFresh, defStyle, s.cfg.ReloadBufferMin)
 	if err != nil {
 		return nil, err
 	}
@@ -822,28 +850,90 @@ func (s *Server) GeneratePlan(ctx context.Context, request api.GeneratePlanReque
 		return nil, fmt.Errorf("failed to insert plan: %w", err)
 	}
 
+	baseDate, _ := time.Parse("2006-01-02", dateStr)
+
 	for _, t := range res.Plan.Trips {
+		dtKey := fmt.Sprintf("%s:%s", t.District, depot)
+		dt := ref.DistrictTravel[dtKey]
+		veh := ref.Vehicles[t.VehicleID]
+
+		var serviceAllowances []int
+		var stopTimingInputs []planning.StopTimingInput
+		var loadedWeightG int64
+		var loadedVolumeUl int64
+		sumAllowance := 0
+
+		for _, stop := range t.Stops {
+			out := ref.Outlets[stop.Order.OutletID]
+			saKey := fmt.Sprintf("%s:%s", stop.Order.Brand, out.DockType)
+			sa := ref.ServiceAllowance[saKey]
+			if sa == 0 {
+				sa = 15
+			}
+			serviceAllowances = append(serviceAllowances, sa)
+			sumAllowance += sa
+			loadedWeightG += stop.Order.TotalWeightG
+			loadedVolumeUl += stop.Order.TotalVolumeUl
+
+			stopTimingInputs = append(stopTimingInputs, planning.StopTimingInput{
+				Seq:                stop.Seq,
+				ServiceMin:         sa,
+				WindowOpenTimeStr:  out.WindowOpenTime,
+				WindowCloseTimeStr: out.WindowCloseTime,
+				MallWindowStr:      out.MallWindow,
+			})
+		}
+
+		tripMinutes := planning.CalculateTripMinutes(dt.DepotToDistrictFreeflowMin, dt.InterStopFreeflowMin, serviceAllowances)
+		estKm := planning.CalculateFuelDistanceKm(dt.DepotToDistrictKm, dt.InterStopKm, len(t.Stops))
+		estFuelMl := planning.CalculateFuelUsageMl(dt.DepotToDistrictKm, dt.InterStopKm, len(t.Stops), veh.KmPerL)
+		budgetLimit := 270
+		if t.Brand != "Fresh" {
+			budgetLimit = 480
+		}
+
 		minutesJSON, _ := json.Marshal(map[string]int{
-			"depot_to_district_min": 25,
-			"inter_stop_min":        8,
-			"service_allowance_min": 15,
-			"total_trip_min":        100,
-			"budget_limit_min":      270,
+			"depot_to_district_min":       dt.DepotToDistrictFreeflowMin,
+			"inter_stop_min":              dt.InterStopFreeflowMin,
+			"service_allowance_total_min": sumAllowance,
+			"total_trip_min":              tripMinutes,
+			"budget_limit_min":            budgetLimit,
 		})
 
 		_, err = tx.Exec(ctx, `
 			INSERT INTO trips (id, plan_id, vehicle_id, trip_no, brand, district, status, planned_depart, minutes, est_km, est_fuel_ml, loaded_weight_g, loaded_volume_ul)
-			VALUES ($1, $2, $3, $4, $5, $6, 'planned', $7, $8, 50.0, 12000, 0, 0)
-		`, t.ID, planID, t.VehicleID, t.TripNo, t.Brand, t.District, t.PlannedDepart, minutesJSON)
+			VALUES ($1, $2, $3, $4, $5, $6, 'planned', $7, $8, $9, $10, $11, $12)
+		`, t.ID, planID, t.VehicleID, t.TripNo, t.Brand, t.District, t.PlannedDepart, minutesJSON, estKm, estFuelMl, loadedWeightG, loadedVolumeUl)
 		if err != nil {
 			return nil, fmt.Errorf("failed to insert trip: %w", err)
 		}
 
-		for _, stop := range t.Stops {
+		etas, _ := planning.CalculateStopETAs(baseDate, t.PlannedDepart, dt.DepotToDistrictFreeflowMin, dt.InterStopFreeflowMin, stopTimingInputs)
+
+		for i, stop := range t.Stops {
+			out := ref.Outlets[stop.Order.OutletID]
+			wOpen := out.WindowOpenTime
+			if len(wOpen) == 5 {
+				wOpen += ":00"
+			}
+			wClose := out.WindowCloseTime
+			if len(wClose) == 5 {
+				wClose += ":00"
+			}
+
+			var etaVal *time.Time
+			var lateRisk float32
+			if i < len(etas) {
+				etaVal = &etas[i].ArrivalTime
+				if etas[i].IsLate {
+					lateRisk = 1.0
+				}
+			}
+
 			_, err = tx.Exec(ctx, `
-				INSERT INTO trip_stops (id, plan_id, trip_id, order_id, seq, window_open, window_close, status)
-				VALUES ($1, $2, $3, $4, $5, '04:00:00'::time, '08:00:00'::time, 'pending')
-			`, stop.ID, planID, t.ID, stop.Order.ID, stop.Seq)
+				INSERT INTO trip_stops (id, plan_id, trip_id, order_id, seq, window_open, window_close, eta, eta_source, late_risk, status)
+				VALUES ($1, $2, $3, $4, $5, $6::time, $7::time, $8, 'rule', $9, 'pending')
+			`, stop.ID, planID, t.ID, stop.Order.ID, stop.Seq, wOpen, wClose, etaVal, lateRisk)
 			if err != nil {
 				return nil, fmt.Errorf("failed to insert trip stop: %w", err)
 			}
@@ -891,9 +981,87 @@ func (s *Server) GetPlan(ctx context.Context, request api.GetPlanRequestObject) 
 }
 
 func (s *Server) UpdatePlanAssignments(ctx context.Context, request api.UpdatePlanAssignmentsRequestObject) (api.UpdatePlanAssignmentsResponseObject, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	for _, asgn := range request.Body.Assignments {
+		switch asgn.Action {
+		case "move":
+			if asgn.TripId != nil {
+				seq := 1
+				if asgn.Seq != nil {
+					seq = *asgn.Seq
+				}
+				_, _ = tx.Exec(ctx, `DELETE FROM deferrals WHERE plan_id = $1 AND order_id = $2`, request.Id, asgn.OrderId)
+				_, _ = tx.Exec(ctx, `
+					INSERT INTO trip_stops (id, plan_id, trip_id, order_id, seq, window_open, window_close, status)
+					VALUES ($1, $2, $3, $4, $5, '04:00:00'::time, '08:00:00'::time, 'pending')
+					ON CONFLICT (plan_id, order_id) DO UPDATE SET
+						trip_id = EXCLUDED.trip_id,
+						seq = EXCLUDED.seq
+				`, uuid.New(), request.Id, *asgn.TripId, asgn.OrderId, seq)
+			}
+		case "reorder":
+			if asgn.Seq != nil {
+				_, _ = tx.Exec(ctx, `UPDATE trip_stops SET seq = $1 WHERE plan_id = $2 AND order_id = $3`, *asgn.Seq, request.Id, asgn.OrderId)
+			}
+		case "defer":
+			_, _ = tx.Exec(ctx, `DELETE FROM trip_stops WHERE plan_id = $1 AND order_id = $2`, request.Id, asgn.OrderId)
+			reason := "MANUAL"
+			if asgn.OverrideReason != nil && *asgn.OverrideReason != "" {
+				reason = *asgn.OverrideReason
+			}
+			explJSON, _ := json.Marshal(map[string]interface{}{"note": reason, "manual": true})
+			_, _ = tx.Exec(ctx, `
+				INSERT INTO deferrals (plan_id, order_id, reason_code, reason_params, explanation, decided_by, carried_to)
+				VALUES ($1, $2, 'MANUAL', '{}'::jsonb, $3, 'dispatcher', CURRENT_DATE + INTERVAL '1 day')
+				ON CONFLICT DO NOTHING
+			`, request.Id, asgn.OrderId, explJSON)
+		case "unassign":
+			_, _ = tx.Exec(ctx, `DELETE FROM trip_stops WHERE plan_id = $1 AND order_id = $2`, request.Id, asgn.OrderId)
+		}
+	}
+
+	_, _ = tx.Exec(ctx, `UPDATE plans SET version = version + 1 WHERE id = $1`, request.Id)
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
 	apiPlan, err := s.fetchAPIPlan(ctx, request.Id)
 	if err != nil {
 		return nil, err
+	}
+
+	planData, err := s.loadPlanDataFromDB(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+	ref, _ := s.fetchRefData(ctx)
+	fuelRemaining, _ := s.fetchFuelRemaining(ctx, planData.Depot, planData.PlanDate)
+	violations := planning.Validate(planData, ref, fuelRemaining)
+	hardCount := 0
+	var apiViolations []api.PlanViolation
+	for _, v := range violations {
+		if v.Severity == planning.SeverityHard {
+			hardCount++
+		}
+		var pMap *map[string]interface{}
+		if len(v.Params) > 0 {
+			pMap = &v.Params
+		}
+		apiViolations = append(apiViolations, api.PlanViolation{
+			Severity:  api.PlanViolationSeverity(v.Severity),
+			Code:      api.PlanViolationCode(v.Code),
+			Message:   v.Message,
+			TripId:    v.TripID,
+			OrderId:   v.OrderID,
+			VehicleId: v.VehicleID,
+			Params:    pMap,
+		})
 	}
 
 	return api.UpdatePlanAssignments200JSONResponse{
@@ -903,9 +1071,9 @@ func (s *Server) UpdatePlanAssignments(ctx context.Context, request api.UpdatePl
 		}{
 			Plan: *apiPlan,
 			Validation: api.PlanValidationResult{
-				IsValid:             true,
-				HardViolationsCount: 0,
-				Violations:          []api.PlanViolation{},
+				IsValid:             hardCount == 0,
+				HardViolationsCount: hardCount,
+				Violations:          apiViolations,
 			},
 		},
 		Headers: api.UpdatePlanAssignments200ResponseHeaders{
@@ -915,10 +1083,47 @@ func (s *Server) UpdatePlanAssignments(ctx context.Context, request api.UpdatePl
 }
 
 func (s *Server) ValidatePlan(ctx context.Context, request api.ValidatePlanRequestObject) (api.ValidatePlanResponseObject, error) {
+	planData, err := s.loadPlanDataFromDB(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	ref, err := s.fetchRefData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fuelRemaining, err := s.fetchFuelRemaining(ctx, planData.Depot, planData.PlanDate)
+	if err != nil {
+		return nil, err
+	}
+
+	violations := planning.Validate(planData, ref, fuelRemaining)
+	hardCount := 0
+	var apiViolations []api.PlanViolation
+	for _, v := range violations {
+		if v.Severity == planning.SeverityHard {
+			hardCount++
+		}
+		var pMap *map[string]interface{}
+		if len(v.Params) > 0 {
+			pMap = &v.Params
+		}
+		apiViolations = append(apiViolations, api.PlanViolation{
+			Severity:  api.PlanViolationSeverity(v.Severity),
+			Code:      api.PlanViolationCode(v.Code),
+			Message:   v.Message,
+			TripId:    v.TripID,
+			OrderId:   v.OrderID,
+			VehicleId: v.VehicleID,
+			Params:    pMap,
+		})
+	}
+
 	return api.ValidatePlan200JSONResponse{
-		IsValid:             true,
-		HardViolationsCount: 0,
-		Violations:          []api.PlanViolation{},
+		IsValid:             hardCount == 0,
+		HardViolationsCount: hardCount,
+		Violations:          apiViolations,
 	}, nil
 }
 
@@ -951,6 +1156,54 @@ func (s *Server) PublishPlan(ctx context.Context, request api.PublishPlanRequest
 		return nil, err
 	}
 
+	// Update trips status to 'planned'
+	_, _ = tx.Exec(ctx, `UPDATE trips SET status = 'planned' WHERE plan_id = $1`, request.Id)
+
+	// Update orders in trip stops to 'planned'
+	_, _ = tx.Exec(ctx, `
+		UPDATE orders SET status = 'planned'
+		WHERE id IN (SELECT order_id FROM trip_stops WHERE plan_id = $1)
+	`, request.Id)
+
+	// Update deferred orders to 'deferred'
+	_, _ = tx.Exec(ctx, `
+		UPDATE orders SET status = 'deferred'
+		WHERE id IN (SELECT order_id FROM deferrals WHERE plan_id = $1)
+	`, request.Id)
+
+	// Update outlet_service_state
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO outlet_service_state (outlet_id, last_served_date, skip_streak)
+		SELECT DISTINCT o.outlet_id, $2::date, 0
+		FROM trip_stops ts
+		JOIN orders o ON o.id = ts.order_id
+		WHERE ts.plan_id = $1
+		ON CONFLICT (outlet_id) DO UPDATE SET
+			last_served_date = EXCLUDED.last_served_date,
+			skip_streak = 0
+	`, request.Id, planDate)
+
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO outlet_service_state (outlet_id, skip_streak)
+		SELECT DISTINCT o.outlet_id, 1
+		FROM deferrals d
+		JOIN orders o ON o.id = d.order_id
+		WHERE d.plan_id = $1
+		ON CONFLICT (outlet_id) DO UPDATE SET
+			skip_streak = outlet_service_state.skip_streak + 1
+	`, request.Id)
+
+	// Reserve fuel in fuel_ledger for each trip
+	pDateT, _ := time.Parse("2006-01-02", planDate)
+	isoY, isoW := pDateT.ISOWeek()
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO fuel_ledger (vehicle_id, iso_year, iso_week, trip_id, liters_ml, kind)
+		SELECT vehicle_id, $2, $3, id, est_fuel_ml, 'reserve'
+		FROM trips
+		WHERE plan_id = $1
+	`, request.Id, isoY, isoW)
+
+	// Generate and save 6-digit PoD receipts with plaintext receipt_code
 	rows, err := tx.Query(ctx, `SELECT id FROM trip_stops WHERE plan_id = $1`, request.Id)
 	if err == nil {
 		var stopIDs []uuid.UUID
@@ -970,12 +1223,13 @@ func (s *Server) PublishPlan(ctx context.Context, request api.PublishPlanRequest
 			hash := hex.EncodeToString(h.Sum(nil))
 
 			_, _ = tx.Exec(ctx, `
-				INSERT INTO stop_receipts (stop_id, code_salt, code_hash, issued_at)
-				VALUES ($1, $2, $3, $4)
+				INSERT INTO stop_receipts (stop_id, code_salt, code_hash, receipt_code, issued_at)
+				VALUES ($1, $2, $3, $4, $5)
 				ON CONFLICT (stop_id) DO UPDATE SET
 					code_salt = EXCLUDED.code_salt,
-					code_hash = EXCLUDED.code_hash
-			`, sid, salt, hash, now)
+					code_hash = EXCLUDED.code_hash,
+					receipt_code = EXCLUDED.receipt_code
+			`, sid, salt, hash, code, now)
 		}
 	}
 
@@ -1038,32 +1292,88 @@ func (s *Server) OverrideDeferral(ctx context.Context, request api.OverrideDefer
 }
 
 func (s *Server) ExplainOrderPlacement(ctx context.Context, request api.ExplainOrderPlacementRequestObject) (api.ExplainOrderPlacementResponseObject, error) {
-	var ref string
-	_ = s.pool.QueryRow(ctx, `SELECT ref FROM orders WHERE id = $1`, request.OrderId).Scan(&ref)
+	var ref, status string
+	err := s.pool.QueryRow(ctx, `SELECT ref, status FROM orders WHERE id = $1`, request.OrderId).Scan(&ref, &status)
+	if err != nil {
+		return nil, err
+	}
+
+	var rCode string
+	var rParams, expl []byte
+	err = s.pool.QueryRow(ctx, `
+		SELECT reason_code, reason_params, explanation
+		FROM deferrals
+		WHERE order_id = $1
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, request.OrderId).Scan(&rCode, &rParams, &expl)
+
+	if err == nil {
+		var explMap map[string]interface{}
+		_ = json.Unmarshal(expl, &explMap)
+		binding := rCode
+		return api.ExplainOrderPlacement200JSONResponse{
+			OrderId:             request.OrderId,
+			OrderRef:            ref,
+			Status:              "deferred",
+			BindingConstraint:   &binding,
+			CandidatesEvaluated: intPtr(len(explMap)),
+			Trace: []map[string]interface{}{
+				{"step": 1, "action": "evaluated_open_trips", "result": "no_fit"},
+				{"step": 2, "action": "evaluated_fleet_capacity", "binding": rCode, "details": explMap},
+			},
+		}, nil
+	}
+
+	statusVal := api.OrderExplanationStatusServed
+	if status == "deferred" {
+		statusVal = api.OrderExplanationStatusDeferred
+	}
 
 	return api.ExplainOrderPlacement200JSONResponse{
 		OrderId:             request.OrderId,
 		OrderRef:            ref,
-		Status:              "deferred",
-		BindingConstraint:   strPtr("CAPACITY_VOLUME"),
-		CandidatesEvaluated: intPtr(4),
+		Status:              statusVal,
+		BindingConstraint:   nil,
+		CandidatesEvaluated: intPtr(1),
 		Trace: []map[string]interface{}{
-			{"step": 1, "action": "checked_open_trips", "result": "no_feasible_fit"},
-			{"step": 2, "action": "checked_fleet_capacity", "binding": "CAPACITY_VOLUME", "free_m3": 1.2, "needed_m3": 3.4},
+			{"step": 1, "action": "allocated", "status": status},
 		},
 	}, nil
 }
 
 func (s *Server) GetDispatchProgress(ctx context.Context, request api.GetDispatchProgressRequestObject) (api.GetDispatchProgressResponseObject, error) {
+	depot := request.Params.Depot
+	dateStr := request.Params.Date.String()
+
+	var totalTrips, departedTrips, completedTrips, totalStops, deliveredStops int
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(DISTINCT t.id) as total_trips,
+			COUNT(DISTINCT CASE WHEN t.status IN ('departed', 'completed') THEN t.id END) as departed_trips,
+			COUNT(DISTINCT CASE WHEN t.status = 'completed' THEN t.id END) as completed_trips,
+			COUNT(ts.id) as total_stops,
+			COUNT(CASE WHEN ts.status IN ('delivered', 'delivered_short', 'receipt_confirmed') THEN ts.id END) as delivered_stops
+		FROM plans p
+		JOIN trips t ON t.plan_id = p.id
+		LEFT JOIN trip_stops ts ON ts.trip_id = t.id
+		WHERE p.depot = $1 AND p.plan_date = $2::date AND p.status = 'published'
+	`, depot, dateStr).Scan(&totalTrips, &departedTrips, &completedTrips, &totalStops, &deliveredStops)
+
+	pct := float64(0)
+	if err == nil && totalStops > 0 {
+		pct = float64(deliveredStops) / float64(totalStops) * 100.0
+	}
+
 	return api.GetDispatchProgress200JSONResponse{
-		Depot:          request.Params.Depot,
+		Depot:          depot,
 		Date:           request.Params.Date,
-		TotalTrips:     12,
-		DepartedTrips:  5,
-		CompletedTrips: 2,
-		TotalStops:     36,
-		DeliveredStops: 18,
-		CompletionPct:  50.0,
+		TotalTrips:     totalTrips,
+		DepartedTrips:  departedTrips,
+		CompletedTrips: completedTrips,
+		TotalStops:     totalStops,
+		DeliveredStops: deliveredStops,
+		CompletionPct:  pct,
 	}, nil
 }
 
@@ -1131,20 +1441,59 @@ func (s *Server) ResolveIssue(ctx context.Context, request api.ResolveIssueReque
 }
 
 func (s *Server) GetWeeklyForecast(ctx context.Context, request api.GetWeeklyForecastRequestObject) (api.GetWeeklyForecastResponseObject, error) {
+	depot := request.Params.Depot
+	year, week := s.clk.Now().ISOWeek()
+
+	var opDays int
+	var maxRamp float64
+	var hasPayday, hasMonsoon int
+	_ = s.pool.QueryRow(ctx, `
+		SELECT COUNT(*), COALESCE(MAX(festival_ramp), 0), COALESCE(MAX(is_payday), 0), COALESCE(MAX(monsoon), 0)
+		FROM calendar_days
+		WHERE iso_year = $1 AND iso_week = $2 AND is_operating = 1
+	`, year, week).Scan(&opDays, &maxRamp, &hasPayday, &hasMonsoon)
+
+	if opDays == 0 {
+		opDays = 6
+	}
+
+	surge := 1.0
+	if hasPayday == 1 {
+		surge += 0.20
+	}
+	if maxRamp > 0 {
+		surge += maxRamp * 0.35
+	}
+
+	var freshCount, styleCount, techCount int
+	_ = s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM outlets WHERE depot = $1 AND brand = 'Fresh'`, depot).Scan(&freshCount)
+	_ = s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM outlets WHERE depot = $1 AND brand = 'Style'`, depot).Scan(&styleCount)
+	_ = s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM outlets WHERE depot = $1 AND brand = 'Tech'`, depot).Scan(&techCount)
+
+	freshVol := float64(freshCount*opDays) * 0.6 * surge
+	freshWt := float64(freshCount*opDays) * 120.0 * surge
+	styleVol := float64(styleCount) * 4.5 * surge
+	styleWt := float64(styleCount) * 750.0 * surge
+	techVol := float64(techCount) * 5.0 * surge
+	techWt := float64(techCount) * 600.0 * surge
+
+	reeferTrips := int(math.Ceil(freshVol * 0.45 / 15.0))
+	dryTrips := int(math.Ceil((freshVol*0.55 + styleVol + techVol) / 20.0))
+
 	return api.GetWeeklyForecast200JSONResponse{
-		Depot:                request.Params.Depot,
-		IsoYear:              2026,
-		IsoWeek:              41,
-		EstimatedReeferTrips: 18,
-		EstimatedDryTrips:    35,
+		Depot:                depot,
+		IsoYear:              year,
+		IsoWeek:              week,
+		EstimatedReeferTrips: reeferTrips,
+		EstimatedDryTrips:    dryTrips,
 		BrandForecasts: []struct {
 			Brand         string  `json:"brand"`
 			TotalVolumeM3 float64 `json:"total_volume_m3"`
 			TotalWeightKg float64 `json:"total_weight_kg"`
 		}{
-			{"Fresh", 240.5, 48000.0},
-			{"Style", 110.0, 18500.0},
-			{"Tech", 75.0, 9200.0},
+			{"Fresh", math.Round(freshVol*10) / 10, math.Round(freshWt*10) / 10},
+			{"Style", math.Round(styleVol*10) / 10, math.Round(styleWt*10) / 10},
+			{"Tech", math.Round(techVol*10) / 10, math.Round(techWt*10) / 10},
 		},
 	}, nil
 }
@@ -1208,7 +1557,7 @@ func (s *Server) GetLoaderManifest(ctx context.Context, request api.GetLoaderMan
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT ts.id, ts.seq, o.outlet_id, o.brand, outl.dock_type
+		SELECT ts.id, ts.seq, o.id, o.outlet_id, o.brand, outl.dock_type
 		FROM trip_stops ts
 		JOIN orders o ON o.id = ts.order_id
 		JOIN outlets outl ON outl.outlet_id = o.outlet_id
@@ -1223,6 +1572,7 @@ func (s *Server) GetLoaderManifest(ctx context.Context, request api.GetLoaderMan
 	type stopData struct {
 		stopID   uuid.UUID
 		seq      int
+		orderID  uuid.UUID
 		outletID string
 		brand    string
 		dockType string
@@ -1230,7 +1580,7 @@ func (s *Server) GetLoaderManifest(ctx context.Context, request api.GetLoaderMan
 	var stops []stopData
 	for rows.Next() {
 		var sd stopData
-		if err := rows.Scan(&sd.stopID, &sd.seq, &sd.outletID, &sd.brand, &sd.dockType); err == nil {
+		if err := rows.Scan(&sd.stopID, &sd.seq, &sd.orderID, &sd.outletID, &sd.brand, &sd.dockType); err == nil {
 			stops = append(stops, sd)
 		}
 	}
@@ -1239,6 +1589,27 @@ func (s *Server) GetLoaderManifest(ctx context.Context, request api.GetLoaderMan
 	var manifestStops []api.LoaderManifestStop
 	for _, sd := range stops {
 		reverseSeq := nStops - sd.seq + 1
+
+		var lines []api.OrderLine
+		lRows, err := s.pool.Query(ctx, `
+			SELECT ol.line_no, ol.sku, ci.name_en, ol.qty, ol.weight_g, ol.volume_ul, ci.temp_requirement
+			FROM order_lines ol
+			JOIN catalog_items ci ON ci.sku = ol.sku
+			WHERE ol.order_id = $1
+			ORDER BY ol.line_no ASC
+		`, sd.orderID)
+		if err == nil {
+			for lRows.Next() {
+				var ln api.OrderLine
+				var tReq string
+				if err := lRows.Scan(&ln.LineNo, &ln.Sku, &ln.Name, &ln.Qty, &ln.WeightG, &ln.VolumeUl, &tReq); err == nil {
+					ln.TempRequirement = api.OrderLineTempRequirement(tReq)
+					lines = append(lines, ln)
+				}
+			}
+			lRows.Close()
+		}
+
 		manifestStops = append(manifestStops, api.LoaderManifestStop{
 			StopId:         sd.stopID,
 			StopSeq:        sd.seq,
@@ -1246,7 +1617,7 @@ func (s *Server) GetLoaderManifest(ctx context.Context, request api.GetLoaderMan
 			OutletId:       sd.outletID,
 			Brand:          sd.brand,
 			DockType:       sd.dockType,
-			Lines:          []api.OrderLine{},
+			Lines:          lines,
 		})
 	}
 
@@ -1261,7 +1632,7 @@ func (s *Server) GetLoaderManifest(ctx context.Context, request api.GetLoaderMan
 		VehicleId:           vID,
 		TripNo:              tNo,
 		Status:              api.TripStatus(status),
-		ChangedAfterLoading: false,
+		ChangedAfterLoading: pVer > 1,
 		ReverseLoadStops:    manifestStops,
 	}, nil
 }
@@ -1319,30 +1690,33 @@ func (s *Server) GetDriverRun(ctx context.Context, request api.GetDriverRunReque
 		vehicleID = *u.VehicleID
 	}
 
-	demoDate := "2026-10-05"
+	dateStr := s.clk.Now().Format("2006-01-02")
 
 	var pID uuid.UUID
 	var pVer int
 	var depot string
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, version, depot
-		FROM plans
-		WHERE plan_date = $1::date AND status = 'published'
-		ORDER BY version DESC
+		SELECT p.id, p.version, p.depot
+		FROM trips t
+		JOIN plans p ON p.id = t.plan_id
+		WHERE t.vehicle_id = $1 AND p.plan_date = $2::date AND p.status = 'published'
+		ORDER BY p.version DESC
 		LIMIT 1
-	`, demoDate).Scan(&pID, &pVer, &depot)
+	`, vehicleID, dateStr).Scan(&pID, &pVer, &depot)
 	if err != nil {
-		pID = uuid.New()
-		pVer = 1
-		depot = "Peliyagoda"
+		err = s.pool.QueryRow(ctx, `
+			SELECT id, version, depot
+			FROM plans
+			WHERE plan_date = $1::date AND status = 'published'
+			ORDER BY version DESC
+			LIMIT 1
+		`, dateStr).Scan(&pID, &pVer, &depot)
+		if err != nil {
+			pID = uuid.New()
+			pVer = 1
+			depot = "Peliyagoda"
+		}
 	}
-
-	var snapshot api.DriverRunSnapshot
-	snapshot.Date = openapi_types.Date{Time: mustParseDate(demoDate)}
-	snapshot.Depot = depot
-	snapshot.VehicleId = vehicleID
-	snapshot.PlanId = pID
-	snapshot.PlanVersion = pVer
 
 	type stopType = struct {
 		Brand             string             `json:"brand"`
@@ -1368,30 +1742,91 @@ func (s *Server) GetDriverRun(ctx context.Context, request api.GetDriverRunReque
 		TripNo int                `json:"trip_no"`
 	}
 
-	snapshot.Trips = []tripType{
-		{
-			TripId: uuid.New(),
-			TripNo: 1,
-			Status: api.TripStatusPlanned,
-			Stops: []stopType{
-				{
-					StopId:            uuid.New(),
-					Seq:               1,
-					OutletId:          "OUT-FRESH-001",
-					Brand:             "Fresh",
-					District:          "Colombo",
-					DockType:          strPtr("street"),
-					ParkingConstraint: strPtr("normal"),
-					WindowOpen:        "04:00:00",
-					WindowClose:       "08:00:00",
-					ReceiptSalt:       "9a8b7c6d5e4f3a2b",
-					ReceiptHash:       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-					Status:            api.Pending,
-					Lines:             []api.OrderLine{},
-				},
-			},
-		},
+	var trips []tripType
+	tRows, err := s.pool.Query(ctx, `
+		SELECT t.id, t.trip_no, t.status
+		FROM trips t
+		JOIN plans p ON p.id = t.plan_id
+		WHERE t.vehicle_id = $1 AND p.id = $2
+		ORDER BY t.trip_no ASC
+	`, vehicleID, pID)
+
+	if err == nil {
+		defer tRows.Close()
+		for tRows.Next() {
+			var tr tripType
+			var tStatus string
+			if err := tRows.Scan(&tr.TripId, &tr.TripNo, &tStatus); err == nil {
+				tr.Status = api.TripStatus(tStatus)
+				trips = append(trips, tr)
+			}
+		}
 	}
+
+	for i := range trips {
+		tID := trips[i].TripId
+		sRows, err := s.pool.Query(ctx, `
+			SELECT ts.id, ts.seq, o.id, o.outlet_id, o.brand, outl.district, outl.dock_type, outl.parking_constraint,
+			       ts.window_open::text, ts.window_close::text, ts.eta, ts.status,
+			       COALESCE(sr.code_salt, ''), COALESCE(sr.code_hash, '')
+			FROM trip_stops ts
+			JOIN orders o ON o.id = ts.order_id
+			JOIN outlets outl ON outl.outlet_id = o.outlet_id
+			LEFT JOIN stop_receipts sr ON sr.stop_id = ts.id
+			WHERE ts.trip_id = $1
+			ORDER BY ts.seq ASC
+		`, tID)
+		if err == nil {
+			var stops []stopType
+			for sRows.Next() {
+				var st stopType
+				var oID uuid.UUID
+				var dock, park string
+				var statusStr string
+				if err := sRows.Scan(&st.StopId, &st.Seq, &oID, &st.OutletId, &st.Brand, &st.District,
+					&dock, &park, &st.WindowOpen, &st.WindowClose, &st.Eta, &statusStr, &st.ReceiptSalt, &st.ReceiptHash); err == nil {
+					st.DockType = &dock
+					st.ParkingConstraint = &park
+					st.Status = api.StopStatus(statusStr)
+
+					lRows, err := s.pool.Query(ctx, `
+						SELECT ol.line_no, ol.sku, ci.name_en, ol.qty, ol.weight_g, ol.volume_ul, ci.temp_requirement
+						FROM order_lines ol
+						JOIN catalog_items ci ON ci.sku = ol.sku
+						WHERE ol.order_id = $1
+						ORDER BY ol.line_no ASC
+					`, oID)
+					if err == nil {
+						var lines []api.OrderLine
+						for lRows.Next() {
+							var ln api.OrderLine
+							var tReq string
+							if err := lRows.Scan(&ln.LineNo, &ln.Sku, &ln.Name, &ln.Qty, &ln.WeightG, &ln.VolumeUl, &tReq); err == nil {
+								ln.TempRequirement = api.OrderLineTempRequirement(tReq)
+								lines = append(lines, ln)
+							}
+						}
+						lRows.Close()
+						st.Lines = lines
+					} else {
+						st.Lines = []api.OrderLine{}
+					}
+
+					stops = append(stops, st)
+				}
+			}
+			sRows.Close()
+			trips[i].Stops = stops
+		}
+	}
+
+	var snapshot api.DriverRunSnapshot
+	snapshot.Date = openapi_types.Date{Time: mustParseDate(dateStr)}
+	snapshot.Depot = depot
+	snapshot.VehicleId = vehicleID
+	snapshot.PlanId = pID
+	snapshot.PlanVersion = pVer
+	snapshot.Trips = trips
 
 	return api.GetDriverRun200JSONResponse(snapshot), nil
 }
@@ -1442,15 +1877,56 @@ func (s *Server) SyncPush(ctx context.Context, request api.SyncPushRequestObject
 }
 
 func (s *Server) SyncPull(ctx context.Context, request api.SyncPullRequestObject) (api.SyncPullResponseObject, error) {
+	cursorSeq := int64(0)
+	if request.Params.Cursor != nil && *request.Params.Cursor != "" {
+		if parsed, err := strconv.ParseInt(*request.Params.Cursor, 10, 64); err == nil {
+			cursorSeq = parsed
+		}
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT seq, type, payload
+		FROM event_feed
+		WHERE seq > $1
+		ORDER BY seq ASC
+		LIMIT 100
+	`, cursorSeq)
+
+	type changeItem = struct {
+		Action  api.SyncPullResponseChangesAction `json:"action"`
+		Entity  api.SyncPullResponseChangesEntity `json:"entity"`
+		Id      string                            `json:"id"`
+		Payload map[string]interface{}            `json:"payload"`
+		Version int                               `json:"version"`
+	}
+
+	var changes []changeItem
+	maxSeq := cursorSeq
+
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var seq int64
+			var typ string
+			var pBytes []byte
+			if err := rows.Scan(&seq, &typ, &pBytes); err == nil {
+				maxSeq = seq
+				var payload map[string]interface{}
+				_ = json.Unmarshal(pBytes, &payload)
+				changes = append(changes, changeItem{
+					Action:  api.Upsert,
+					Entity:  api.SyncPullResponseChangesEntity(typ),
+					Id:      fmt.Sprintf("%d", seq),
+					Payload: payload,
+					Version: int(seq),
+				})
+			}
+		}
+	}
+
 	return api.SyncPull200JSONResponse{
-		NextCursor: "cursor-100",
-		Changes: []struct {
-			Action  api.SyncPullResponseChangesAction `json:"action"`
-			Entity  api.SyncPullResponseChangesEntity `json:"entity"`
-			Id      string                            `json:"id"`
-			Payload map[string]interface{}            `json:"payload"`
-			Version int                               `json:"version"`
-		}{},
+		NextCursor: fmt.Sprintf("%d", maxSeq),
+		Changes:    changes,
 	}, nil
 }
 
@@ -1647,7 +2123,7 @@ func (s *Server) fetchOrdersForPlanning(ctx context.Context, depot, dateStr stri
 		FROM orders o
 		JOIN outlets outl ON outl.outlet_id = o.outlet_id
 		LEFT JOIN outlet_service_state oss ON oss.outlet_id = o.outlet_id
-		WHERE outl.depot = $1 AND o.delivery_date = $2::date AND o.status IN ('queued', 'submitted')
+		WHERE outl.depot = $1 AND o.delivery_date = $2::date AND o.status IN ('queued', 'submitted') AND o.is_late = false
 	`, depot, dateStr)
 	if err != nil {
 		return nil, err
@@ -1668,6 +2144,127 @@ func (s *Server) fetchOrdersForPlanning(ctx context.Context, depot, dateStr stri
 		}
 	}
 	return result, nil
+}
+
+func (s *Server) fetchFuelRemaining(ctx context.Context, depot, planDateStr string) (map[string]int64, error) {
+	t, err := time.Parse("2006-01-02", planDateStr)
+	if err != nil {
+		return nil, err
+	}
+	y, w := t.ISOWeek()
+
+	fuelRemaining := make(map[string]int64)
+	rows, err := s.pool.Query(ctx, `SELECT vehicle_id, weekly_fuel_quota_l FROM vehicles WHERE depot = $1`, depot)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var vID string
+		var quotaL float64
+		if err := rows.Scan(&vID, &quotaL); err == nil {
+			fuelRemaining[vID] = int64(quotaL * 1000.0)
+		}
+	}
+
+	ledRows, err := s.pool.Query(ctx, `
+		SELECT vehicle_id, COALESCE(SUM(CASE WHEN kind = 'reserve' THEN liters_ml ELSE -liters_ml END), 0)
+		FROM fuel_ledger
+		WHERE iso_year = $1 AND iso_week = $2
+		GROUP BY vehicle_id
+	`, y, w)
+	if err == nil {
+		defer ledRows.Close()
+		for ledRows.Next() {
+			var vID string
+			var usedMl int64
+			if err := ledRows.Scan(&vID, &usedMl); err == nil {
+				if rem, ok := fuelRemaining[vID]; ok {
+					fuelRemaining[vID] = rem - usedMl
+				}
+			}
+		}
+	}
+
+	return fuelRemaining, nil
+}
+
+func (s *Server) loadPlanDataFromDB(ctx context.Context, planID uuid.UUID) (*planning.PlanData, error) {
+	var depot, planDateStr string
+	err := s.pool.QueryRow(ctx, `SELECT depot, plan_date::text FROM plans WHERE id = $1`, planID).Scan(&depot, &planDateStr)
+	if err != nil {
+		return nil, err
+	}
+
+	planData := &planning.PlanData{
+		ID:        planID,
+		Depot:     depot,
+		PlanDate:  planDateStr,
+		Trips:     []planning.PlanTrip{},
+		Deferrals: []planning.PlanOrder{},
+	}
+
+	tripRows, err := s.pool.Query(ctx, `
+		SELECT id, vehicle_id, trip_no, brand, district, planned_depart
+		FROM trips
+		WHERE plan_id = $1
+		ORDER BY trip_no ASC
+	`, planID)
+	if err == nil {
+		defer tripRows.Close()
+		for tripRows.Next() {
+			var pt planning.PlanTrip
+			if err := tripRows.Scan(&pt.ID, &pt.VehicleID, &pt.TripNo, &pt.Brand, &pt.District, &pt.PlannedDepart); err == nil {
+				planData.Trips = append(planData.Trips, pt)
+			}
+		}
+	}
+
+	for i := range planData.Trips {
+		tID := planData.Trips[i].ID
+		stopRows, err := s.pool.Query(ctx, `
+			SELECT ts.id, ts.seq, o.id, o.ref, o.outlet_id, o.brand, o.delivery_date::text, o.temp_requirement,
+			       o.total_units, o.total_weight_g, o.total_volume_ul
+			FROM trip_stops ts
+			JOIN orders o ON o.id = ts.order_id
+			WHERE ts.trip_id = $1
+			ORDER BY ts.seq ASC
+		`, tID)
+		if err == nil {
+			var stops []planning.PlanStop
+			for stopRows.Next() {
+				var ps planning.PlanStop
+				ps.TripID = tID
+				if err := stopRows.Scan(&ps.ID, &ps.Seq, &ps.Order.ID, &ps.Order.Ref, &ps.Order.OutletID, &ps.Order.Brand,
+					&ps.Order.DeliveryDate, &ps.Order.TempRequirement, &ps.Order.TotalUnits, &ps.Order.TotalWeightG, &ps.Order.TotalVolumeUl); err == nil {
+					stops = append(stops, ps)
+				}
+			}
+			stopRows.Close()
+			planData.Trips[i].Stops = stops
+		}
+	}
+
+	defRows, err := s.pool.Query(ctx, `
+		SELECT o.id, o.ref, o.outlet_id, o.brand, o.delivery_date::text, o.temp_requirement,
+		       o.total_units, o.total_weight_g, o.total_volume_ul
+		FROM deferrals d
+		JOIN orders o ON o.id = d.order_id
+		WHERE d.plan_id = $1
+	`, planID)
+	if err == nil {
+		defer defRows.Close()
+		for defRows.Next() {
+			var po planning.PlanOrder
+			if err := defRows.Scan(&po.ID, &po.Ref, &po.OutletID, &po.Brand, &po.DeliveryDate, &po.TempRequirement,
+				&po.TotalUnits, &po.TotalWeightG, &po.TotalVolumeUl); err == nil {
+				planData.Deferrals = append(planData.Deferrals, po)
+			}
+		}
+	}
+
+	return planData, nil
 }
 
 func (s *Server) fetchAPIPlan(ctx context.Context, planID uuid.UUID) (*api.Plan, error) {
@@ -1691,6 +2288,99 @@ func (s *Server) fetchAPIPlan(ctx context.Context, planID uuid.UUID) (*api.Plan,
 	var summary api.PlanSummary
 	_ = json.Unmarshal(summaryJSON, &summary)
 
+	tripRows, err := s.pool.Query(ctx, `
+		SELECT t.id, t.vehicle_id, t.trip_no, t.brand, t.district, t.status, t.planned_depart,
+		       t.minutes, t.est_km, t.est_fuel_ml, t.loaded_weight_g, t.loaded_volume_ul,
+		       v.type, v.temp
+		FROM trips t
+		JOIN vehicles v ON v.vehicle_id = t.vehicle_id
+		WHERE t.plan_id = $1
+		ORDER BY t.vehicle_id ASC, t.trip_no ASC
+	`, planID)
+
+	var trips []api.Trip
+	if err == nil {
+		defer tripRows.Close()
+		for tripRows.Next() {
+			var t api.Trip
+			var tNo int
+			var minutesJSON []byte
+			var vType, vTemp string
+			var km float64
+			if err := tripRows.Scan(&t.Id, &t.VehicleId, &tNo, &t.Brand, &t.District, &t.Status, &t.PlannedDepart,
+				&minutesJSON, &km, &t.EstFuelMl, &t.LoadedWeightG, &t.LoadedVolumeUl, &vType, &vTemp); err == nil {
+				t.PlanId = planID
+				t.TripNo = api.TripTripNo(tNo)
+				t.EstKm = km
+				vt := api.TripVehicleType(vType)
+				vtm := api.TripVehicleTemp(vTemp)
+				t.VehicleType = &vt
+				t.VehicleTemp = &vtm
+				_ = json.Unmarshal(minutesJSON, &t.Minutes)
+				trips = append(trips, t)
+			}
+		}
+	}
+
+	for i := range trips {
+		tripID := trips[i].Id
+		stopRows, err := s.pool.Query(ctx, `
+			SELECT ts.id, ts.seq, ts.order_id, o.ref, o.outlet_id, o.brand,
+			       ts.window_open::text, ts.window_close::text, ts.eta, ts.eta_source, ts.late_risk, ts.status
+			FROM trip_stops ts
+			JOIN orders o ON o.id = ts.order_id
+			WHERE ts.trip_id = $1
+			ORDER BY ts.seq ASC
+		`, tripID)
+		if err == nil {
+			var stops []api.TripStop
+			for stopRows.Next() {
+				var st api.TripStop
+				var etaSrc *string
+				if err := stopRows.Scan(&st.Id, &st.Seq, &st.OrderId, &st.OrderRef, &st.OutletId, &st.Brand,
+					&st.WindowOpen, &st.WindowClose, &st.Eta, &etaSrc, &st.LateRisk, &st.Status); err == nil {
+					st.PlanId = planID
+					st.TripId = tripID
+					if etaSrc != nil {
+						es := api.TripStopEtaSource(*etaSrc)
+						st.EtaSource = &es
+					}
+					stops = append(stops, st)
+				}
+			}
+			stopRows.Close()
+			trips[i].Stops = stops
+		}
+	}
+
+	defRows, err := s.pool.Query(ctx, `
+		SELECT d.id, d.order_id, o.ref, o.outlet_id, o.brand, d.reason_code, d.reason_params, d.explanation,
+		       d.decided_by, d.carried_to::text, d.created_at
+		FROM deferrals d
+		JOIN orders o ON o.id = d.order_id
+		WHERE d.plan_id = $1
+		ORDER BY d.created_at ASC
+	`, planID)
+
+	var deferrals []api.Deferral
+	if err == nil {
+		defer defRows.Close()
+		for defRows.Next() {
+			var def api.Deferral
+			var rCode, cToStr string
+			var rParams, expl []byte
+			if err := defRows.Scan(&def.Id, &def.OrderId, &def.OrderRef, &def.OutletId, &def.Brand,
+				&rCode, &rParams, &expl, &def.DecidedBy, &cToStr, &def.CreatedAt); err == nil {
+				def.PlanId = planID
+				def.ReasonCode = api.DeferralReasonCode(rCode)
+				def.CarriedTo = openapi_types.Date{Time: mustParseDate(cToStr)}
+				_ = json.Unmarshal(rParams, &def.ReasonParams)
+				_ = json.Unmarshal(expl, &def.Explanation)
+				deferrals = append(deferrals, def)
+			}
+		}
+	}
+
 	return &api.Plan{
 		Id:          planID,
 		Depot:       api.PlanDepot(depot),
@@ -1701,8 +2391,8 @@ func (s *Server) fetchAPIPlan(ctx context.Context, planID uuid.UUID) (*api.Plan,
 		Summary:     summary,
 		CreatedBy:   createdBy,
 		PublishedAt: publishedAt,
-		Trips:       []api.Trip{},
-		Deferrals:   []api.Deferral{},
+		Trips:       trips,
+		Deferrals:   deferrals,
 	}, nil
 }
 

@@ -108,3 +108,146 @@ func TestPlanner_RapidPropertyTests(t *testing.T) {
 		assert.Equal(rt, len(orders), len(servedMap)+len(res.Deferrals), "Every input order must be accounted for")
 	})
 }
+
+func TestPlanner_VanOnlyConstraint(t *testing.T) {
+	ref := sampleRefData()
+	defaultFresh, _ := time.Parse("15:04", "03:30")
+	defaultStyle, _ := time.Parse("15:04", "07:00")
+
+	// Order for OUT-002 which has parking_constraint = "van_only"
+	orders := []OrderPlanningContext{
+		{
+			Order: PlanOrder{
+				ID:              uuid.New(),
+				Ref:             "ORD-VAN-001",
+				OutletID:        "OUT-002",
+				Brand:           "Fresh",
+				DeliveryDate:    "2026-10-05",
+				TempRequirement: "chilled",
+				TotalUnits:      10,
+				TotalWeightG:    10000,
+				TotalVolumeUl:   10000000,
+			},
+		},
+	}
+
+	res, err := Plan(context.Background(), "Peliyagoda", "2026-10-05", StrategyFairnessFirst, orders, ref, nil, defaultFresh, defaultStyle, 15)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, res.Summary.ServedOrders)
+	require.Len(t, res.Plan.Trips, 1)
+	// Must be assigned to VEH-VAN, never to a truck
+	assert.Equal(t, "VEH-VAN", res.Plan.Trips[0].VehicleID)
+}
+
+func TestPlanner_FuelQuotaEnforcement(t *testing.T) {
+	ref := sampleRefData()
+	defaultFresh, _ := time.Parse("15:04", "03:30")
+	defaultStyle, _ := time.Parse("15:04", "07:00")
+
+	orders := []OrderPlanningContext{
+		{
+			Order: PlanOrder{
+				ID:              uuid.New(),
+				Ref:             "ORD-FUEL-001",
+				OutletID:        "OUT-001",
+				Brand:           "Fresh",
+				DeliveryDate:    "2026-10-05",
+				TempRequirement: "ambient",
+				TotalUnits:      10,
+				TotalWeightG:    10000,
+				TotalVolumeUl:   10000000,
+			},
+		},
+	}
+
+	// Fuel remaining set to very low: only 500 mL remaining for each vehicle
+	fuelRemaining := map[string]int64{
+		"VEH-REEFER":  500,
+		"VEH-AMBIENT": 500,
+		"VEH-VAN":     500,
+	}
+
+	res, err := Plan(context.Background(), "Peliyagoda", "2026-10-05", StrategyFairnessFirst, orders, ref, fuelRemaining, defaultFresh, defaultStyle, 15)
+	require.NoError(t, err)
+
+	// Since 500 mL is insufficient for a ~30 km return trip, the order must be deferred with FUEL_QUOTA!
+	assert.Equal(t, 0, res.Summary.ServedOrders)
+	assert.Equal(t, 1, res.Summary.DeferredOrders)
+	require.Len(t, res.Deferrals, 1)
+	assert.Equal(t, CodeFuelQuota, res.Deferrals[0].ReasonCode)
+}
+
+func TestPlanner_Trip2DepartureReturnLeg(t *testing.T) {
+	ref := sampleRefData()
+	// Add an outlet in Gampaha with normal parking constraint
+	ref.Outlets["OUT-GAMPAHA-NORMAL"] = OutletRef{
+		OutletID:          "OUT-GAMPAHA-NORMAL",
+		Brand:             "Fresh",
+		District:          "Gampaha",
+		Depot:             "Peliyagoda",
+		DockType:          "rear_dock",
+		ParkingConstraint: "normal",
+		WindowOpenTime:    "04:00:00",
+		WindowCloseTime:   "08:00:00",
+	}
+
+	// Only give 1 vehicle so both trips must be scheduled on the same vehicle
+	ref.Vehicles = map[string]VehicleRef{
+		"VEH-REEFER": ref.Vehicles["VEH-REEFER"],
+	}
+
+	defaultFresh, _ := time.Parse("15:04", "03:30")
+	defaultStyle, _ := time.Parse("15:04", "07:00")
+
+	// Order 1 is to Gampaha (depot-to-district freeflow = 37 min, service allowance = 15 min)
+	// Order 2 is to Colombo (depot-to-district freeflow = 24 min, service allowance = 16 min)
+	orders := []OrderPlanningContext{
+		{
+			Order: PlanOrder{
+				ID:              uuid.New(),
+				Ref:             "ORD-TRIP1",
+				OutletID:        "OUT-GAMPAHA-NORMAL", // Gampaha
+				Brand:           "Fresh",
+				DeliveryDate:    "2026-10-05",
+				TempRequirement: "chilled",
+				TotalUnits:      10,
+				TotalWeightG:    10000,
+				TotalVolumeUl:   10000000,
+			},
+		},
+		{
+			Order: PlanOrder{
+				ID:              uuid.New(),
+				Ref:             "ORD-TRIP2",
+				OutletID:        "OUT-001", // Colombo
+				Brand:           "Fresh",
+				DeliveryDate:    "2026-10-05",
+				TempRequirement: "chilled",
+				TotalUnits:      10,
+				TotalWeightG:    10000,
+				TotalVolumeUl:   10000000,
+			},
+		},
+	}
+
+	res, err := Plan(context.Background(), "Peliyagoda", "2026-10-05", StrategyFairnessFirst, orders, ref, nil, defaultFresh, defaultStyle, 15)
+	require.NoError(t, err)
+
+	require.Len(t, res.Plan.Trips, 2)
+	trip1 := res.Plan.Trips[0]
+	trip2 := res.Plan.Trips[1]
+
+	// Trip 1 departs at 03:30
+	assert.Equal(t, "03:30", trip1.PlannedDepart.Format("15:04"))
+
+	// Trip 1 is to Gampaha:
+	// Outbound: 37 min
+	// Service (OUT-002 rear_dock): 15 min
+	// Total Trip 1 duration: 37 + 15 = 52 min
+	// Return leg from Gampaha: 37 min
+	// Reload buffer: 15 min
+	// Total elapsed before Trip 2 departs: 52 + 37 + 15 = 104 min
+	// 03:30 + 104 min = 05:14!
+	assert.Equal(t, "05:14", trip2.PlannedDepart.Format("15:04"))
+}
