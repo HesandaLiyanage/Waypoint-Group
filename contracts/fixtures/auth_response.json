@@ -1,0 +1,17 @@
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.demo_token_dispatcher",
+  "token_type": "Bearer",
+  "expires_in": 900,
+  "user": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "name": "Peliyagoda Dispatcher",
+    "email": "dispatcher@waypoint.local",
+    "role": "dispatcher",
+    "depot": "Peliyagoda",
+    "outlet_id": null,
+    "vehicle_id": null,
+    "locale": "en",
+    "active": true,
+    "created_at": "2026-10-01T00:00:00+05:30"
+  }
+}

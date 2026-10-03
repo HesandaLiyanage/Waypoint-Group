@@ -4,7 +4,7 @@ FROM golang:1.23-alpine AS builder
 WORKDIR /app
 
 # Copy module definitions
-COPY apps/api/go.mod ./
+COPY apps/api/go.mod apps/api/go.sum* ./
 RUN go mod download
 
 # Copy source code
@@ -19,7 +19,8 @@ FROM alpine:3.20
 RUN apk --no-cache add ca-certificates tzdata
 ENV TZ=Asia/Colombo
 
-WORKDIR /root/
+WORKDIR /app
+RUN mkdir -p /app/data/photos
 COPY --from=builder /bin/waypoint-api /usr/local/bin/waypoint-api
 
 EXPOSE 8080

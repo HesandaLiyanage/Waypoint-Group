@@ -6,10 +6,29 @@
 :80 {
 	encode gzip zstd
 
+	# Security headers
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
 	# Logging
 	log {
 		output stdout
 		format console
+	}
+
+	# SSE unbuffered stream proxy
+	@sse path /api/v1/events/stream
+	handle @sse {
+		reverse_proxy api:8080 {
+			flush_interval -1
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 
 	# API routing to Go Modular Monolith
@@ -33,7 +52,7 @@
 		}
 	}
 
-	# Frontend Vite React PWA routing
+	# Frontend Vite React PWA routing (with proxy to web container)
 	handle {
 		reverse_proxy web:3000 {
 			header_up Host {host}

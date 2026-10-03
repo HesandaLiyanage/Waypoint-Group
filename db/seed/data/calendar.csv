@@ -1,0 +1,32 @@
+date,dow,dow_name,is_weekend,iso_year,iso_week,is_payday,festival,festival_ramp,is_holiday,monsoon,is_operating
+2026-10-01,3,Thursday,0,2026,40,0,None,0.0,0,1,1
+2026-10-02,4,Friday,0,2026,40,0,None,0.0,0,1,1
+2026-10-03,5,Saturday,0,2026,40,0,Deepavali Season,0.7,0,1,1
+2026-10-04,6,Sunday,1,2026,40,0,Deepavali Season,0.7,0,1,0
+2026-10-05,0,Monday,0,2026,41,0,Deepavali Season,0.85,0,1,1
+2026-10-06,1,Tuesday,0,2026,41,0,Deepavali Season,0.7,0,1,1
+2026-10-07,2,Wednesday,0,2026,41,0,Deepavali Season,0.7,0,1,1
+2026-10-08,3,Thursday,0,2026,41,0,Deepavali Season,0.7,0,1,1
+2026-10-09,4,Friday,0,2026,41,0,Deepavali Season,0.7,0,1,1
+2026-10-10,5,Saturday,0,2026,41,0,Deepavali Season,0.7,0,1,1
+2026-10-11,6,Sunday,1,2026,41,0,None,0.0,0,1,0
+2026-10-12,0,Monday,0,2026,42,0,None,0.0,0,1,1
+2026-10-13,1,Tuesday,0,2026,42,0,None,0.0,0,1,1
+2026-10-14,2,Wednesday,0,2026,42,0,None,0.0,0,1,1
+2026-10-15,3,Thursday,0,2026,42,0,None,0.0,0,1,1
+2026-10-16,4,Friday,0,2026,42,0,None,0.0,0,1,1
+2026-10-17,5,Saturday,0,2026,42,0,None,0.0,0,1,1
+2026-10-18,6,Sunday,1,2026,42,0,None,0.0,0,1,0
+2026-10-19,0,Monday,0,2026,43,0,None,0.0,0,1,1
+2026-10-20,1,Tuesday,0,2026,43,0,None,0.0,0,1,1
+2026-10-21,2,Wednesday,0,2026,43,0,None,0.0,0,1,1
+2026-10-22,3,Thursday,0,2026,43,0,None,0.0,0,1,1
+2026-10-23,4,Friday,0,2026,43,0,None,0.0,0,1,1
+2026-10-24,5,Saturday,0,2026,43,0,None,0.0,1,1,1
+2026-10-25,6,Sunday,1,2026,43,1,None,0.0,0,1,0
+2026-10-26,0,Monday,0,2026,44,1,None,0.0,0,1,1
+2026-10-27,1,Tuesday,0,2026,44,1,None,0.0,0,1,1
+2026-10-28,2,Wednesday,0,2026,44,0,None,0.0,0,1,1
+2026-10-29,3,Thursday,0,2026,44,0,None,0.0,0,1,1
+2026-10-30,4,Friday,0,2026,44,0,None,0.0,0,1,1
+2026-10-31,5,Saturday,0,2026,44,0,None,0.0,0,1,1

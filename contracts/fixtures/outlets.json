@@ -1,0 +1,46 @@
+[
+  {
+    "outlet_id": "OUT-FRESH-001",
+    "brand": "Fresh",
+    "district": "Colombo",
+    "depot": "Peliyagoda",
+    "dock_type": "street",
+    "parking_constraint": "normal",
+    "mall_window": null,
+    "window_open_time": "04:00:00",
+    "window_close_time": "08:00:00"
+  },
+  {
+    "outlet_id": "OUT-FRESH-002",
+    "brand": "Fresh",
+    "district": "Gampaha",
+    "depot": "Peliyagoda",
+    "dock_type": "rear_dock",
+    "parking_constraint": "normal",
+    "mall_window": null,
+    "window_open_time": "04:00:00",
+    "window_close_time": "08:00:00"
+  },
+  {
+    "outlet_id": "OUT-STYLE-001",
+    "brand": "Style",
+    "district": "Colombo",
+    "depot": "Peliyagoda",
+    "dock_type": "mall_bay",
+    "parking_constraint": "mall_dock",
+    "mall_window": "09:00-12:00",
+    "window_open_time": "09:00:00",
+    "window_close_time": "12:00:00"
+  },
+  {
+    "outlet_id": "OUT-TECH-001",
+    "brand": "Tech",
+    "district": "Kandy",
+    "depot": "Kandy",
+    "dock_type": "street",
+    "parking_constraint": "van_only",
+    "mall_window": null,
+    "window_open_time": "08:00:00",
+    "window_close_time": "14:00:00"
+  }
+]

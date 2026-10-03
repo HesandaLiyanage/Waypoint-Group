@@ -1,0 +1,14 @@
+{
+  "type": "https://waypoint.lk/errors/capacity-volume-exceeded",
+  "title": "Capacity Volume Exceeded",
+  "status": 422,
+  "code": "CAP_VOLUME",
+  "request_id": "req-01j987654321",
+  "detail": "Adding order ORD-20261005-042 requires 3.40 m3, but vehicle VEH-014 has only 1.20 m3 available.",
+  "params": {
+    "needed_m3": 3.4,
+    "free_m3": 1.2,
+    "vehicle_id": "VEH-014",
+    "order_id": "01923c8a-4000-7000-8000-000000000042"
+  }
+}

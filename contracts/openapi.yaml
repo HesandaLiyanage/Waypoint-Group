@@ -1,259 +1,14 @@
 openapi: 3.0.3
 info:
-  title: Waypoint Group API
+  title: Waypoint Delivery Platform API
   version: 1.0.0
   description: |
-    Core API contracts for Waypoint Group modular monolith and mobile/PWA clients.
-    Supports offline sync outbox processing, role-based operations, and ML integration.
+    Contract-first OpenAPI specification for Waypoint Group logistics & delivery platform.
+    Connects Store Managers, Dispatchers, Loaders, and Drivers across 120 retail outlets,
+    60 vehicles, and two depots (Peliyagoda and Kandy).
 servers:
-  - url: http://localhost:8080/api/v1
-    description: Local Go Modular Monolith API
   - url: /api/v1
-    description: Same-origin via Caddy Reverse Proxy
-
-paths:
-  /health:
-    get:
-      summary: Health check endpoint
-      operationId: getHealth
-      tags:
-        - System
-      responses:
-        '200':
-          description: Service is healthy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HealthResponse'
-
-  /auth/login:
-    post:
-      summary: Authenticate user and obtain session token
-      operationId: login
-      tags:
-        - Auth
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
-      responses:
-        '200':
-          description: Successful authentication
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '401':
-          description: Invalid credentials
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /auth/me:
-    get:
-      summary: Get current authenticated user profile and permissions
-      operationId: getCurrentUser
-      tags:
-        - Auth
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Current user info
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /waypoints:
-    get:
-      summary: List operational waypoints / missions
-      operationId: listWaypoints
-      tags:
-        - Waypoints
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: status
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/WaypointStatus'
-        - name: assigned_role
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/UserRole'
-      responses:
-        '200':
-          description: List of waypoints
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Waypoint'
-
-    post:
-      summary: Create a new operational waypoint
-      operationId: createWaypoint
-      tags:
-        - Waypoints
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateWaypointRequest'
-      responses:
-        '201':
-          description: Waypoint created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Waypoint'
-
-  /waypoints/{id}:
-    get:
-      summary: Get waypoint by ID
-      operationId: getWaypointById
-      tags:
-        - Waypoints
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Waypoint found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Waypoint'
-        '404':
-          description: Waypoint not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /waypoints/{id}/status:
-    patch:
-      summary: Update status of a waypoint
-      operationId: updateWaypointStatus
-      tags:
-        - Waypoints
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateStatusRequest'
-      responses:
-        '200':
-          description: Status updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Waypoint'
-
-  /sync/push:
-    post:
-      summary: Push a batch of offline outbox events to server
-      operationId: pushSyncEvents
-      tags:
-        - Sync
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SyncPushRequest'
-      responses:
-        '200':
-          description: Events processed and acknowledged
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SyncPushResponse'
-
-  /sync/pull:
-    get:
-      summary: Pull delta changes since given server sequence / timestamp
-      operationId: pullSyncEvents
-      tags:
-        - Sync
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: since_cursor
-          in: query
-          description: Server event cursor or epoch timestamp for delta sync
-          required: false
-          schema:
-            type: string
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 100
-      responses:
-        '200':
-          description: Delta sync batch
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SyncPullResponse'
-
-  /ml/eta:
-    post:
-      summary: Predict estimated time of arrival using ML inference service
-      operationId: predictEta
-      tags:
-        - ML
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/EtaPredictionRequest'
-      responses:
-        '200':
-          description: Calculated ETA inference
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EtaPredictionResponse'
+    description: Waypoint API v1 Base Path
 
 components:
   securitySchemes:
@@ -261,59 +16,117 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: Access token (15-minute expiration)
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: HTTP-only secure rotating refresh token
+
+  parameters:
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Unique client-generated key guaranteeing idempotent execution.
+    IfMatchHeader:
+      name: If-Match
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Entity tag / version for optimistic concurrency control.
+    LastEventIDHeader:
+      name: Last-Event-ID
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Monotonic sequence ID for SSE stream replay.
 
   schemas:
-    HealthResponse:
+    ProblemDetails:
       type: object
       required:
+        - type
+        - title
         - status
-        - timestamp
-        - service
+        - code
+        - request_id
       properties:
+        type:
+          type: string
+          example: "https://waypoint.lk/errors/validation-failed"
+        title:
+          type: string
+          example: "Validation Failed"
         status:
+          type: integer
+          example: 422
+        code:
           type: string
-          example: ok
-        timestamp:
+          example: "CAPACITY_VOLUME"
+        request_id:
           type: string
-          format: date-time
-          example: "2026-10-01T06:00:00Z"
-        service:
+          example: "req-01h8abc123"
+        detail:
           type: string
-          example: waypoint-api
-        version:
-          type: string
-          example: 1.0.0
+          example: "Order volume exceeds available vehicle volume capacity"
+        params:
+          type: object
+          additionalProperties: true
+          example:
+            needed_m3: 3.2
+            free_m3: 1.1
+            vehicle_id: "VEH003"
 
     UserRole:
       type: string
-      enum:
-        - admin
-        - dispatcher
-        - field_agent
-        - driver
-      description: The four distinct operational role shells in Waypoint
+      enum: [dispatcher, loader, driver, store_manager]
+
+    UserLocale:
+      type: string
+      enum: [en, si, ta]
 
     User:
       type: object
       required:
         - id
-        - email
         - name
+        - email
         - role
+        - locale
+        - active
         - created_at
       properties:
         id:
           type: string
           format: uuid
+        name:
+          type: string
         email:
           type: string
           format: email
-        name:
-          type: string
         role:
           $ref: '#/components/schemas/UserRole'
-        phone:
+        depot:
           type: string
+          nullable: true
+          example: "Peliyagoda"
+        outlet_id:
+          type: string
+          nullable: true
+          example: "OUT001"
+        vehicle_id:
+          type: string
+          nullable: true
+          example: "VEH001"
+        locale:
+          $ref: '#/components/schemas/UserLocale'
+        active:
+          type: boolean
         created_at:
           type: string
           format: date-time
@@ -330,247 +143,2891 @@ components:
         password:
           type: string
 
+    PinLoginRequest:
+      type: object
+      required:
+        - pin
+      properties:
+        pin:
+          type: string
+          example: "1234"
+        identifier:
+          type: string
+          description: User email, user ID, or depot name for shared terminal
+          example: "loader@waypoint.local"
+
     AuthResponse:
       type: object
       required:
-        - token
+        - access_token
+        - token_type
+        - expires_in
         - user
       properties:
-        token:
+        access_token:
           type: string
+        token_type:
+          type: string
+          example: "Bearer"
+        expires_in:
+          type: integer
+          example: 900
         user:
           $ref: '#/components/schemas/User'
 
-    WaypointStatus:
-      type: string
-      enum:
-        - pending
-        - assigned
-        - in_progress
-        - completed
-        - failed
-        - cancelled
+    PatchMeRequest:
+      type: object
+      properties:
+        locale:
+          $ref: '#/components/schemas/UserLocale'
 
-    Waypoint:
+    Outlet:
+      type: object
+      required:
+        - outlet_id
+        - brand
+        - district
+        - depot
+        - dock_type
+        - parking_constraint
+        - window_open_time
+        - window_close_time
+      properties:
+        outlet_id:
+          type: string
+          example: "OUT001"
+        brand:
+          type: string
+          enum: [Fresh, Style, Tech]
+        district:
+          type: string
+          example: "Colombo"
+        depot:
+          type: string
+          enum: [Peliyagoda, Kandy]
+        dock_type:
+          type: string
+          enum: [rear_dock, street, mall_bay]
+        parking_constraint:
+          type: string
+          enum: [normal, van_only, mall_dock]
+        mall_window:
+          type: string
+          nullable: true
+          example: "06:00-08:00"
+        window_open_time:
+          type: string
+          example: "04:00:00"
+        window_close_time:
+          type: string
+          example: "08:00:00"
+
+    Vehicle:
+      type: object
+      required:
+        - vehicle_id
+        - type
+        - temp
+        - weight_cap_kg
+        - volume_cap_m3
+        - fuel_type
+        - km_per_l
+        - weekly_fuel_quota_l
+        - depot
+      properties:
+        vehicle_id:
+          type: string
+          example: "VEH001"
+        type:
+          type: string
+          enum: [truck, van]
+        temp:
+          type: string
+          enum: [reefer, ambient]
+        weight_cap_kg:
+          type: integer
+          example: 3500
+        volume_cap_m3:
+          type: number
+          format: double
+          example: 18.5
+        fuel_type:
+          type: string
+          example: "diesel"
+        km_per_l:
+          type: number
+          format: double
+          example: 4.5
+        weekly_fuel_quota_l:
+          type: number
+          format: double
+          example: 150.0
+        depot:
+          type: string
+          enum: [Peliyagoda, Kandy]
+        status:
+          type: string
+          enum: [available, in_workshop]
+          example: "available"
+
+    CalendarDay:
+      type: object
+      required:
+        - date
+        - dow
+        - dow_name
+        - is_weekend
+        - iso_year
+        - iso_week
+        - is_payday
+        - festival
+        - festival_ramp
+        - is_holiday
+        - monsoon
+        - is_operating
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2026-10-05"
+        dow:
+          type: integer
+          example: 0
+        dow_name:
+          type: string
+          example: "Monday"
+        is_weekend:
+          type: integer
+          example: 0
+        iso_year:
+          type: integer
+          example: 2026
+        iso_week:
+          type: integer
+          example: 41
+        is_payday:
+          type: integer
+          example: 0
+        festival:
+          type: string
+          example: "Deepavali"
+        festival_ramp:
+          type: number
+          format: double
+          example: 0.8
+        is_holiday:
+          type: integer
+          example: 0
+        monsoon:
+          type: integer
+          example: 1
+        is_operating:
+          type: integer
+          example: 1
+
+    CatalogItem:
+      type: object
+      required:
+        - sku
+        - brand
+        - name_en
+        - name_si
+        - name_ta
+        - unit_weight_kg
+        - unit_volume_m3
+        - temp_requirement
+      properties:
+        sku:
+          type: string
+          example: "SKU-FRESH-MILK-1L"
+        brand:
+          type: string
+          enum: [Fresh, Style, Tech]
+        name_en:
+          type: string
+          example: "Fresh Full Cream Milk 1L"
+        name_si:
+          type: string
+          example: "නැවුම් එළකිරි 1L"
+        name_ta:
+          type: string
+          example: "புதிய பால் 1L"
+        unit_weight_kg:
+          type: number
+          format: double
+          example: 1.05
+        unit_volume_m3:
+          type: number
+          format: double
+          example: 0.0012
+        temp_requirement:
+          type: string
+          enum: [ambient, chilled]
+
+    OrderItemInput:
+      type: object
+      required:
+        - sku
+        - qty
+      properties:
+        sku:
+          type: string
+        qty:
+          type: integer
+          minimum: 1
+
+    CreateOrderRequest:
       type: object
       required:
         - id
-        - title
-        - status
-        - latitude
-        - longitude
-        - created_at
-        - updated_at
+        - outlet_id
+        - delivery_date
+        - items
       properties:
         id:
           type: string
           format: uuid
-        title:
+          description: Client-generated UUIDv7 for idempotent submit
+        outlet_id:
           type: string
-        description:
+          example: "OUT001"
+        delivery_date:
+          type: string
+          format: date
+          example: "2026-10-05"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemInput'
+        source:
+          type: string
+          enum: [app, phone_entry]
+          default: app
+
+    OrderLine:
+      type: object
+      required:
+        - line_no
+        - sku
+        - name
+        - qty
+        - weight_g
+        - volume_ul
+        - temp_requirement
+      properties:
+        line_no:
+          type: integer
+        sku:
+          type: string
+        name:
+          type: string
+        qty:
+          type: integer
+        weight_g:
+          type: integer
+          format: int64
+        volume_ul:
+          type: integer
+          format: int64
+        temp_requirement:
+          type: string
+          enum: [ambient, chilled]
+
+    OrderStatus:
+      type: string
+      enum: [submitted, queued, planned, loading, on_route, delivered, delivered_short, failed, deferred, cancelled]
+
+    Order:
+      type: object
+      required:
+        - id
+        - ref
+        - outlet_id
+        - brand
+        - delivery_date
+        - temp_requirement
+        - status
+        - total_units
+        - total_weight_g
+        - total_volume_ul
+        - placed_at
+        - is_late
+        - source
+        - version
+        - created_by
+      properties:
+        id:
+          type: string
+          format: uuid
+        ref:
+          type: string
+          example: "ORD-20261005-001"
+        outlet_id:
+          type: string
+        brand:
+          type: string
+          enum: [Fresh, Style, Tech]
+        delivery_date:
+          type: string
+          format: date
+        temp_requirement:
+          type: string
+          enum: [ambient, chilled]
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        total_units:
+          type: integer
+        total_weight_g:
+          type: integer
+          format: int64
+        total_volume_ul:
+          type: integer
+          format: int64
+        placed_at:
+          type: string
+          format: date-time
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_late:
+          type: boolean
+        source:
+          type: string
+        version:
+          type: integer
+        created_by:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderLine'
+
+    CreateOrderResponse:
+      type: object
+      required:
+        - orders
+      properties:
+        orders:
+          type: array
+          description: Created orders (1 order normally, or 2 orders if split across ambient and chilled)
+          items:
+            $ref: '#/components/schemas/Order'
+
+    UpdateOrderRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemInput'
+
+    StoreScheduleStop:
+      type: object
+      required:
+        - order_id
+        - order_ref
+        - status
+        - window_open
+        - window_close
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        order_ref:
           type: string
         status:
-          $ref: '#/components/schemas/WaypointStatus'
-        latitude:
-          type: number
-          format: double
-        longitude:
-          type: number
-          format: double
-        assigned_to:
+          $ref: '#/components/schemas/OrderStatus'
+        trip_status:
+          type: string
+          nullable: true
+          enum: [planned, loading, sealed, departed, completed, aborted]
+        eta:
+          type: string
+          format: date-time
+          nullable: true
+        eta_buffer_min:
+          type: integer
+          nullable: true
+          example: 15
+        eta_source:
+          type: string
+          nullable: true
+          enum: [rule, model]
+        window_open:
+          type: string
+          example: "04:00:00"
+        window_close:
+          type: string
+          example: "08:00:00"
+        receipt_code:
+          type: string
+          nullable: true
+          example: "482913"
+          description: Displayed to store manager for offline PoD verification
+        deferral_notice:
+          type: object
+          nullable: true
+          properties:
+            reason_code:
+              type: string
+            carried_to:
+              type: string
+              format: date
+
+    StoreScheduleResponse:
+      type: object
+      required:
+        - date
+        - outlet_id
+        - stops
+      properties:
+        date:
+          type: string
+          format: date
+        outlet_id:
+          type: string
+        stops:
+          type: array
+          items:
+            $ref: '#/components/schemas/StoreScheduleStop'
+
+    ConfirmReceiptRequest:
+      type: object
+      required:
+        - code
+        - status
+        - lines
+      properties:
+        code:
+          type: string
+          example: "482913"
+        status:
+          type: string
+          enum: [ok, short, damaged, disputed]
+        note:
+          type: string
+          nullable: true
+        lines:
+          type: array
+          items:
+            type: object
+            required:
+              - line_no
+              - qty_received
+              - status
+            properties:
+              line_no:
+                type: integer
+              qty_received:
+                type: integer
+              status:
+                type: string
+                enum: [ok, short, damaged]
+
+    CreateIssueRequest:
+      type: object
+      required:
+        - kind
+        - detail
+      properties:
+        kind:
+          type: string
+          enum: [MISSING_GOODS, DAMAGED_GOODS, ACCESS_BLOCKED, LATE_ARRIVAL, VEHICLE_BREAKDOWN, OTHER]
+        order_id:
           type: string
           format: uuid
           nullable: true
-        assigned_role:
-          $ref: '#/components/schemas/UserRole'
+        trip_id:
+          type: string
+          format: uuid
           nullable: true
-        due_at:
+        stop_id:
+          type: string
+          format: uuid
+          nullable: true
+        detail:
+          type: object
+          additionalProperties: true
+
+    Issue:
+      type: object
+      required:
+        - id
+        - kind
+        - raised_by
+        - raised_role
+        - status
+        - detail
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        order_id:
+          type: string
+          format: uuid
+          nullable: true
+        trip_id:
+          type: string
+          format: uuid
+          nullable: true
+        stop_id:
+          type: string
+          format: uuid
+          nullable: true
+        raised_by:
+          type: string
+          format: uuid
+        raised_role:
+          $ref: '#/components/schemas/UserRole'
+        status:
+          type: string
+          enum: [open, ack, resolved]
+        detail:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Notification:
+      type: object
+      required:
+        - id
+        - user_id
+        - kind
+        - params
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          example: "DEFERRAL_NOTICE"
+        params:
+          type: object
+          additionalProperties: true
+        read_at:
           type: string
           format: date-time
           nullable: true
         created_at:
           type: string
           format: date-time
-        updated_at:
-          type: string
-          format: date-time
 
-    CreateWaypointRequest:
+    GeneratePlanRequest:
       type: object
       required:
-        - title
-        - latitude
-        - longitude
+        - depot
+        - plan_date
       properties:
-        title:
+        depot:
           type: string
-        description:
+          enum: [Peliyagoda, Kandy]
+        plan_date:
           type: string
-        latitude:
-          type: number
-          format: double
-        longitude:
-          type: number
-          format: double
-        assigned_to:
+          format: date
+        strategy:
           type: string
-          format: uuid
-        assigned_role:
-          $ref: '#/components/schemas/UserRole'
-        due_at:
-          type: string
-          format: date-time
+          enum: [fairness_first, max_served]
+          default: fairness_first
 
-    UpdateStatusRequest:
+    PlanStatus:
+      type: string
+      enum: [draft, published, superseded]
+
+    TripStatus:
+      type: string
+      enum: [planned, loading, sealed, departed, completed, aborted]
+
+    StopStatus:
+      type: string
+      enum: [pending, arrived, delivered, delivered_short, failed, receipt_confirmed, receipt_disputed]
+
+    TripStop:
       type: object
       required:
+        - id
+        - plan_id
+        - trip_id
+        - order_id
+        - order_ref
+        - outlet_id
+        - brand
+        - seq
+        - window_open
+        - window_close
         - status
       properties:
-        status:
-          $ref: '#/components/schemas/WaypointStatus'
-        notes:
+        id:
           type: string
+          format: uuid
+        plan_id:
+          type: string
+          format: uuid
+        trip_id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        order_ref:
+          type: string
+        outlet_id:
+          type: string
+        brand:
+          type: string
+        seq:
+          type: integer
+        eta:
+          type: string
+          format: date-time
+          nullable: true
+        eta_source:
+          type: string
+          nullable: true
+          enum: [rule, model]
+        window_open:
+          type: string
+          example: "04:00:00"
+        window_close:
+          type: string
+          example: "08:00:00"
+        late_risk:
+          type: number
+          format: float
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StopStatus'
+        changed_after_loading:
+          type: boolean
+          default: false
+        order_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderLine'
 
-    SyncMutationType:
-      type: string
-      enum:
-        - CREATE
-        - UPDATE
-        - DELETE
+    Trip:
+      type: object
+      required:
+        - id
+        - plan_id
+        - vehicle_id
+        - trip_no
+        - brand
+        - district
+        - status
+        - planned_depart
+        - minutes
+        - est_km
+        - est_fuel_ml
+        - loaded_weight_g
+        - loaded_volume_ul
+        - stops
+      properties:
+        id:
+          type: string
+          format: uuid
+        plan_id:
+          type: string
+          format: uuid
+        vehicle_id:
+          type: string
+        vehicle_type:
+          type: string
+          enum: [truck, van]
+        vehicle_temp:
+          type: string
+          enum: [reefer, ambient]
+        trip_no:
+          type: integer
+          enum: [1, 2]
+        brand:
+          type: string
+          enum: [Fresh, Style, Tech]
+        district:
+          type: string
+        status:
+          $ref: '#/components/schemas/TripStatus'
+        planned_depart:
+          type: string
+          format: date-time
+        minutes:
+          type: object
+          required:
+            - depot_to_district_min
+            - inter_stop_min
+            - service_allowance_min
+            - total_trip_min
+            - budget_limit_min
+          properties:
+            depot_to_district_min:
+              type: integer
+            inter_stop_min:
+              type: integer
+            service_allowance_min:
+              type: integer
+            total_trip_min:
+              type: integer
+            budget_limit_min:
+              type: integer
+        est_km:
+          type: number
+          format: double
+        est_fuel_ml:
+          type: integer
+          format: int64
+        loaded_weight_g:
+          type: integer
+          format: int64
+        loaded_volume_ul:
+          type: integer
+          format: int64
+        weight_utilization_pct:
+          type: number
+          format: double
+        volume_utilization_pct:
+          type: number
+          format: double
+        changed_after_loading:
+          type: boolean
+          default: false
+        stops:
+          type: array
+          items:
+            $ref: '#/components/schemas/TripStop'
 
-    SyncEvent:
+    Deferral:
+      type: object
+      required:
+        - id
+        - plan_id
+        - order_id
+        - order_ref
+        - outlet_id
+        - brand
+        - reason_code
+        - reason_params
+        - explanation
+        - decided_by
+        - carried_to
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        plan_id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        order_ref:
+          type: string
+        outlet_id:
+          type: string
+        brand:
+          type: string
+        reason_code:
+          type: string
+          enum: [CAPACITY_VOLUME, CAPACITY_WEIGHT, NO_REEFER_AVAILABLE, VAN_ONLY_NO_VAN, FUEL_QUOTA, TIME_BUDGET, WINDOW_INFEASIBLE, NO_VEHICLE_AT_DEPOT, LATE_ORDER, MANUAL]
+        reason_params:
+          type: object
+          additionalProperties: true
+        explanation:
+          type: object
+          additionalProperties: true
+        decided_by:
+          type: string
+        carried_to:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+
+    PlanSummary:
+      type: object
+      required:
+        - total_orders
+        - served_orders
+        - deferred_orders
+        - total_trips
+        - active_vehicles
+        - limiting_resources
+      properties:
+        total_orders:
+          type: integer
+        served_orders:
+          type: integer
+        deferred_orders:
+          type: integer
+        total_trips:
+          type: integer
+        active_vehicles:
+          type: integer
+        limiting_resources:
+          type: array
+          items:
+            type: string
+          example: ["reefer volume 98% used; 14 chilled orders deferred"]
+        depot_utilization:
+          type: object
+          additionalProperties: true
+
+    Plan:
+      type: object
+      required:
+        - id
+        - depot
+        - plan_date
+        - version
+        - status
+        - strategy
+        - summary
+        - trips
+        - deferrals
+        - created_by
+      properties:
+        id:
+          type: string
+          format: uuid
+        depot:
+          type: string
+          enum: [Peliyagoda, Kandy]
+        plan_date:
+          type: string
+          format: date
+        version:
+          type: integer
+        status:
+          $ref: '#/components/schemas/PlanStatus'
+        strategy:
+          type: string
+          enum: [fairness_first, max_served]
+        summary:
+          $ref: '#/components/schemas/PlanSummary'
+        trips:
+          type: array
+          items:
+            $ref: '#/components/schemas/Trip'
+        deferrals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Deferral'
+        created_by:
+          type: string
+          format: uuid
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    PlanViolation:
+      type: object
+      required:
+        - severity
+        - code
+        - message
+      properties:
+        severity:
+          type: string
+          enum: [hard, soft, warning]
+        code:
+          type: string
+          enum: [CAP_VOLUME, CAP_WEIGHT, NEED_REEFER, VAN_ONLY, DEPOT_MISMATCH, MIXED_BRAND_DISTRICT, MAX_TRIPS, BUDGET_FRESH, BUDGET_STYLETECH, FUEL_QUOTA, WINDOW_LATE, MALL_WINDOW, VEHICLE_UNAVAILABLE, ORDER_SPLIT, UNKNOWN]
+        message:
+          type: string
+        trip_id:
+          type: string
+          format: uuid
+          nullable: true
+        order_id:
+          type: string
+          format: uuid
+          nullable: true
+        vehicle_id:
+          type: string
+          nullable: true
+        params:
+          type: object
+          additionalProperties: true
+
+    PlanValidationResult:
+      type: object
+      required:
+        - is_valid
+        - hard_violations_count
+        - violations
+      properties:
+        is_valid:
+          type: boolean
+        hard_violations_count:
+          type: integer
+        violations:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanViolation'
+
+    UpdateAssignmentsRequest:
+      type: object
+      required:
+        - assignments
+      properties:
+        assignments:
+          type: array
+          items:
+            type: object
+            required:
+              - order_id
+              - action
+            properties:
+              order_id:
+                type: string
+                format: uuid
+              action:
+                type: string
+                enum: [assign, defer]
+              trip_id:
+                type: string
+                format: uuid
+                nullable: true
+              seq:
+                type: integer
+                nullable: true
+              override_reason:
+                type: string
+                nullable: true
+
+    OverrideDeferralRequest:
+      type: object
+      required:
+        - trip_id
+        - reason_code
+      properties:
+        trip_id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+          nullable: true
+        reason_code:
+          type: string
+        reason_note:
+          type: string
+          nullable: true
+
+    OrderExplanation:
+      type: object
+      required:
+        - order_id
+        - order_ref
+        - status
+        - trace
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        order_ref:
+          type: string
+        status:
+          type: string
+          enum: [served, deferred]
+        assigned_trip_id:
+          type: string
+          format: uuid
+          nullable: true
+        binding_constraint:
+          type: string
+          nullable: true
+        candidates_evaluated:
+          type: integer
+        trace:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    DispatchProgress:
+      type: object
+      required:
+        - depot
+        - date
+        - total_trips
+        - departed_trips
+        - completed_trips
+        - total_stops
+        - delivered_stops
+        - completion_pct
+      properties:
+        depot:
+          type: string
+        date:
+          type: string
+          format: date
+        total_trips:
+          type: integer
+        departed_trips:
+          type: integer
+        completed_trips:
+          type: integer
+        total_stops:
+          type: integer
+        delivered_stops:
+          type: integer
+        failed_stops:
+          type: integer
+        completion_pct:
+          type: number
+          format: double
+        trips:
+          type: array
+          items:
+            type: object
+            properties:
+              trip_id:
+                type: string
+                format: uuid
+              vehicle_id:
+                type: string
+              trip_no:
+                type: integer
+              status:
+                $ref: '#/components/schemas/TripStatus'
+              delivered_count:
+                type: integer
+              total_count:
+                type: integer
+
+    SkippedOutlet:
+      type: object
+      required:
+        - outlet_id
+        - brand
+        - district
+        - skip_streak
+      properties:
+        outlet_id:
+          type: string
+        brand:
+          type: string
+        district:
+          type: string
+        last_served_date:
+          type: string
+          format: date
+          nullable: true
+        skip_streak:
+          type: integer
+
+    LoaderManifestStop:
+      type: object
+      required:
+        - stop_id
+        - stop_seq
+        - reverse_load_seq
+        - outlet_id
+        - brand
+        - dock_type
+        - lines
+      properties:
+        stop_id:
+          type: string
+          format: uuid
+        stop_seq:
+          type: integer
+          description: Delivery stop sequence (1, 2, 3...)
+        reverse_load_seq:
+          type: integer
+          description: Physical dock load sequence (last delivered stop is loaded first)
+        outlet_id:
+          type: string
+        brand:
+          type: string
+        dock_type:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderLine'
+
+    LoaderTripManifest:
+      type: object
+      required:
+        - trip_id
+        - plan_id
+        - plan_version
+        - vehicle_id
+        - trip_no
+        - status
+        - changed_after_loading
+        - reverse_load_stops
+      properties:
+        trip_id:
+          type: string
+          format: uuid
+        plan_id:
+          type: string
+          format: uuid
+        plan_version:
+          type: integer
+        vehicle_id:
+          type: string
+        trip_no:
+          type: integer
+        status:
+          $ref: '#/components/schemas/TripStatus'
+        changed_after_loading:
+          type: boolean
+        reverse_load_stops:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoaderManifestStop'
+
+    BatchLoadCheckRequest:
+      type: object
+      required:
+        - checks
+      properties:
+        checks:
+          type: array
+          items:
+            type: object
+            required:
+              - stop_id
+              - line_no
+              - status
+              - client_event_id
+            properties:
+              stop_id:
+                type: string
+                format: uuid
+              line_no:
+                type: integer
+              status:
+                type: string
+                enum: [ok, short, damaged]
+              qty_short:
+                type: integer
+                default: 0
+              note:
+                type: string
+                nullable: true
+              photo_id:
+                type: string
+                format: uuid
+                nullable: true
+              client_event_id:
+                type: string
+                format: uuid
+
+    DeviceEvent:
       type: object
       required:
         - event_id
-        - entity_type
-        - entity_id
-        - action
+        - device_id
+        - device_seq
+        - type
+        - client_ts
         - payload
-        - client_timestamp
       properties:
         event_id:
           type: string
           format: uuid
-        entity_type:
+        device_id:
           type: string
-          example: waypoint
-        entity_id:
+        device_seq:
+          type: integer
+          format: int64
+        type:
           type: string
-        action:
-          $ref: '#/components/schemas/SyncMutationType'
+          enum: [TRIP_DEPARTED, STOP_ARRIVED, STOP_DELIVERED, STOP_FAILED, ISSUE_REPORTED, TRIP_COMPLETED]
+        stop_id:
+          type: string
+          format: uuid
+          nullable: true
+        plan_version_seen:
+          type: integer
+          nullable: true
+        client_ts:
+          type: string
+          format: date-time
         payload:
           type: object
           additionalProperties: true
-        client_timestamp:
-          type: string
-          format: date-time
-        version:
-          type: integer
-          default: 1
 
     SyncPushRequest:
       type: object
       required:
-        - client_id
         - events
       properties:
-        client_id:
-          type: string
         events:
           type: array
+          maxItems: 100
           items:
-            $ref: '#/components/schemas/SyncEvent'
+            $ref: '#/components/schemas/DeviceEvent'
 
-    SyncAck:
+    SyncEventAck:
       type: object
       required:
         - event_id
-        - status
+        - result
+        - server_ts
       properties:
         event_id:
           type: string
           format: uuid
-        status:
+        result:
           type: string
-          enum: [ACK, CONFLICT, ERROR]
-        error_message:
+          enum: [accepted, duplicate, rejected]
+        reject_code:
           type: string
+          nullable: true
+        server_ts:
+          type: string
+          format: date-time
+        conflict:
+          type: boolean
+          default: false
+        entity_versions:
+          type: object
+          additionalProperties: true
 
     SyncPushResponse:
       type: object
       required:
         - acks
-        - new_cursor
       properties:
         acks:
           type: array
           items:
-            $ref: '#/components/schemas/SyncAck'
-        new_cursor:
-          type: string
+            $ref: '#/components/schemas/SyncEventAck'
 
     SyncPullResponse:
       type: object
       required:
-        - events
+        - changes
         - next_cursor
-        - has_more
       properties:
-        events:
-          type: array
-          items:
-            $ref: '#/components/schemas/SyncEvent'
         next_cursor:
           type: string
-        has_more:
-          type: boolean
+        changes:
+          type: array
+          items:
+            type: object
+            required:
+              - entity
+              - id
+              - version
+              - action
+              - payload
+            properties:
+              entity:
+                type: string
+                enum: [plan, trip, stop, order, notification]
+              id:
+                type: string
+              version:
+                type: integer
+              action:
+                type: string
+                enum: [upsert, delete]
+              payload:
+                type: object
+                additionalProperties: true
 
-    EtaPredictionRequest:
+    DriverRunSnapshot:
       type: object
       required:
-        - origin_lat
-        - origin_lng
-        - destination_lat
-        - destination_lng
+        - date
+        - depot
+        - vehicle_id
+        - plan_id
+        - plan_version
+        - trips
       properties:
-        origin_lat:
-          type: number
-        origin_lng:
-          type: number
-        destination_lat:
-          type: number
-        destination_lng:
-          type: number
-        departure_time:
+        date:
+          type: string
+          format: date
+        depot:
+          type: string
+        vehicle_id:
+          type: string
+        plan_id:
+          type: string
+          format: uuid
+        plan_version:
+          type: integer
+        trips:
+          type: array
+          items:
+            type: object
+            required:
+              - trip_id
+              - trip_no
+              - status
+              - stops
+            properties:
+              trip_id:
+                type: string
+                format: uuid
+              trip_no:
+                type: integer
+              status:
+                $ref: '#/components/schemas/TripStatus'
+              stops:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - stop_id
+                    - seq
+                    - outlet_id
+                    - brand
+                    - district
+                    - window_open
+                    - window_close
+                    - receipt_salt
+                    - receipt_hash
+                    - status
+                    - lines
+                  properties:
+                    stop_id:
+                      type: string
+                      format: uuid
+                    seq:
+                      type: integer
+                    outlet_id:
+                      type: string
+                    brand:
+                      type: string
+                    district:
+                      type: string
+                    dock_type:
+                      type: string
+                    parking_constraint:
+                      type: string
+                    window_open:
+                      type: string
+                    window_close:
+                      type: string
+                    eta:
+                      type: string
+                      format: date-time
+                      nullable: true
+                    receipt_salt:
+                      type: string
+                    receipt_hash:
+                      type: string
+                    status:
+                      $ref: '#/components/schemas/StopStatus'
+                    contact_phone:
+                      type: string
+                      nullable: true
+                    lines:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/OrderLine'
+
+    PhotoRecord:
+      type: object
+      required:
+        - id
+        - kind
+        - content_type
+        - bytes
+        - sha256
+        - uploaded_by
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        stop_id:
+          type: string
+          format: uuid
+          nullable: true
+        kind:
+          type: string
+          enum: [pod, damage, dock_issue]
+        content_type:
+          type: string
+        bytes:
+          type: integer
+        sha256:
+          type: string
+        uploaded_by:
+          type: string
+          format: uuid
+        created_at:
           type: string
           format: date-time
 
-    EtaPredictionResponse:
+    WeeklyForecast:
       type: object
       required:
-        - duration_minutes
-        - distance_km
-        - confidence_score
+        - depot
+        - iso_year
+        - iso_week
+        - brand_forecasts
+        - estimated_reefer_trips
+        - estimated_dry_trips
       properties:
-        duration_minutes:
-          type: number
-        distance_km:
-          type: number
-        confidence_score:
-          type: number
-        estimated_arrival:
+        depot:
           type: string
-          format: date-time
+        iso_year:
+          type: integer
+        iso_week:
+          type: integer
+        estimated_reefer_trips:
+          type: integer
+        estimated_dry_trips:
+          type: integer
+        brand_forecasts:
+          type: array
+          items:
+            type: object
+            required:
+              - brand
+              - total_volume_m3
+              - total_weight_kg
+            properties:
+              brand:
+                type: string
+              total_volume_m3:
+                type: number
+                format: double
+              total_weight_kg:
+                type: number
+                format: double
 
-    ErrorResponse:
-      type: object
-      required:
-        - error
-        - message
-      properties:
-        error:
-          type: string
-        message:
-          type: string
-        details:
-          type: object
+paths:
+  /healthz:
+    get:
+      summary: Liveness check
+      operationId: getHealthz
+      tags: [Ops]
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
+  /readyz:
+    get:
+      summary: Readiness check (DB connectivity & migrations)
+      operationId: getReadyz
+      tags: [Ops]
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  db:
+                    type: string
+                    example: "connected"
+        '503':
+          description: Service not ready
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /auth/login:
+    post:
+      summary: Authenticate with email and password
+      operationId: authLogin
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Successfully authenticated
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: "refresh_token=...; Path=/api/v1/auth; HttpOnly; SameSite=Strict; Secure"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /auth/pin-login:
+    post:
+      summary: PIN authentication for shared depot terminals
+      operationId: authPinLogin
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PinLoginRequest'
+      responses:
+        '200':
+          description: Successfully authenticated via PIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid PIN or identifier
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /auth/refresh:
+    post:
+      summary: Rotate refresh token and obtain new access token
+      operationId: authRefresh
+      tags: [Auth]
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /auth/logout:
+    post:
+      summary: Revoke refresh token family
+      operationId: authLogout
+      tags: [Auth]
+      security:
+        - CookieAuth: []
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Logged out successfully
+
+  /me:
+    get:
+      summary: Get current authenticated user profile
+      operationId: getMe
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    patch:
+      summary: Update current user preferences (locale)
+      operationId: patchMe
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchMeRequest'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /outlets:
+    get:
+      summary: List outlets
+      operationId: listOutlets
+      tags: [Reference]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: depot
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: brand
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: district
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Outlets list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Outlet'
+
+  /vehicles:
+    get:
+      summary: List vehicles
+      operationId: listVehicles
+      tags: [Reference]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: depot
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: temp
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Vehicles list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Vehicle'
+
+  /calendar:
+    get:
+      summary: Get operating calendar days
+      operationId: getCalendar
+      tags: [Reference]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Calendar days
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CalendarDay'
+
+  /catalog:
+    get:
+      summary: List catalog items
+      operationId: listCatalog
+      tags: [Reference]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: brand
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Catalog items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CatalogItem'
+
+  /orders:
+    post:
+      summary: Place order for outlet
+      operationId: createOrder
+      tags: [Store Manager]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created (split into 2 orders if Fresh mixed temp)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateOrderResponse'
+        '400':
+          description: Invalid request or non-operating date
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Order validation error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      summary: List orders
+      operationId: listOrders
+      tags: [Store Manager]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: outlet_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: Orders list
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - orders
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  next_cursor:
+                    type: string
+                    nullable: true
+
+  /orders/{id}:
+    get:
+      summary: Get order by ID
+      operationId: getOrder
+      tags: [Store Manager]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order details
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Order not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    patch:
+      summary: Edit order before cutoff
+      operationId: updateOrder
+      tags: [Store Manager]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IfMatchHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderRequest'
+      responses:
+        '200':
+          description: Order updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '409':
+          description: Order locked after cutoff or version conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    delete:
+      summary: Cancel order before cutoff
+      operationId: cancelOrder
+      tags: [Store Manager]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IfMatchHeader'
+      responses:
+        '204':
+          description: Order cancelled
+        '409':
+          description: Order locked after cutoff or version conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /store/schedule:
+    get:
+      summary: Expected arrival schedule and receipt codes for store
+      operationId: getStoreSchedule
+      tags: [Store Manager]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: outlet_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Store delivery schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreScheduleResponse'
+
+  /stops/{id}/receipt:
+    post:
+      summary: Confirm delivery receipt at store
+      operationId: confirmReceipt
+      tags: [Store Manager]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmReceiptRequest'
+      responses:
+        '200':
+          description: Receipt confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stop_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                  confirmed_at:
+                    type: string
+                    format: date-time
+        '422':
+          description: Invalid receipt code or validation error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /issues:
+    post:
+      summary: Report operational issue
+      operationId: createIssue
+      tags: [Issues]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIssueRequest'
+      responses:
+        '201':
+          description: Issue created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+
+  /notifications:
+    get:
+      summary: List user notifications
+      operationId: listNotifications
+      tags: [Notifications]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+
+  /notifications/{id}/read:
+    post:
+      summary: Mark notification as read
+      operationId: markNotificationRead
+      tags: [Notifications]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Notification marked as read
+
+  /dispatch/queue:
+    get:
+      summary: Get confirmed and carried-over orders queue
+      operationId: getDispatchQueue
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: depot
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Queue of orders ready for planning
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - depot
+                  - date
+                  - total_orders
+                  - orders
+                properties:
+                  depot:
+                    type: string
+                  date:
+                    type: string
+                    format: date
+                  total_orders:
+                    type: integer
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+
+  /dispatch/close-orders:
+    post:
+      summary: Manually trigger cutoff closing for depot and date
+      operationId: closeOrdersCutoff
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - depot
+                - date
+              properties:
+                depot:
+                  type: string
+                date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Cutoff executed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  depot:
+                    type: string
+                  date:
+                    type: string
+                    format: date
+                  closed_orders_count:
+                    type: integer
+                  late_orders_count:
+                    type: integer
+
+  /plans/generate:
+    post:
+      summary: Auto-generate optimized delivery plan
+      operationId: generatePlan
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneratePlanRequest'
+      responses:
+        '201':
+          description: Draft plan generated
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Generation error (e.g. non-operating date)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /plans/{id}:
+    get:
+      summary: Get plan details
+      operationId: getPlan
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Plan details
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+
+  /plans/{id}/assignments:
+    put:
+      summary: Manually edit trip assignments
+      operationId: updatePlanAssignments
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IfMatchHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAssignmentsRequest'
+      responses:
+        '200':
+          description: Assignments updated
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - plan
+                  - validation
+                properties:
+                  plan:
+                    $ref: '#/components/schemas/Plan'
+                  validation:
+                    $ref: '#/components/schemas/PlanValidationResult'
+        '409':
+          description: Plan version conflict or already departed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /plans/{id}/validate:
+    post:
+      summary: Validate plan feasibility with pure rule validator
+      operationId: validatePlan
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanValidationResult'
+
+  /plans/{id}/publish:
+    post:
+      summary: Publish plan atomically (locks, fuel reservation, seal/supersede)
+      operationId: publishPlan
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - $ref: '#/components/parameters/IfMatchHeader'
+      responses:
+        '200':
+          description: Plan published
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan has hard feasibility violations
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /plans/{id}/deferrals:
+    get:
+      summary: List deferrals with reasons and explanations
+      operationId: getPlanDeferrals
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of deferrals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Deferral'
+
+  /plans/{id}/deferrals/{order_id}/override:
+    post:
+      summary: Override deferral and force assign order
+      operationId: overrideDeferral
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverrideDeferralRequest'
+      responses:
+        '200':
+          description: Override applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+
+  /plans/{id}/orders/{order_id}/explain:
+    get:
+      summary: Explain placement or deferral decision for an order
+      operationId: explainOrderPlacement
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Placement explanation trace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderExplanation'
+
+  /dispatch/progress:
+    get:
+      summary: Live progress of trips and deliveries
+      operationId: getDispatchProgress
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: depot
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Progress statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchProgress'
+
+  /dispatch/skipped-outlets:
+    get:
+      summary: List outlets skipped in previous planning cycles
+      operationId: getSkippedOutlets
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Outlets with skip streaks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SkippedOutlet'
+
+  /dispatch/issues:
+    get:
+      summary: List operational issues for dispatcher
+      operationId: listDispatchIssues
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [open, ack, resolved]
+      responses:
+        '200':
+          description: Issues list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Issue'
+
+  /issues/{id}/ack:
+    post:
+      summary: Acknowledge an issue
+      operationId: ackIssue
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Issue acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+
+  /issues/{id}/resolve:
+    post:
+      summary: Resolve an issue
+      operationId: resolveIssue
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Issue resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+
+  /forecast/weekly:
+    get:
+      summary: Weekly volume and trip capacity forecast
+      operationId: getWeeklyForecast
+      tags: [Dispatcher]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: depot
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Weekly forecast
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeeklyForecast'
+
+  /loader/trips:
+    get:
+      summary: List trips assigned to depot for loading
+      operationId: listLoaderTrips
+      tags: [Loader]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: depot
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Trips list for loading
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Trip'
+
+  /loader/trips/{id}/manifest:
+    get:
+      summary: Get trip manifest with reverse-load sequence
+      operationId: getLoaderManifest
+      tags: [Loader]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Manifest with reverse loading order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoaderTripManifest'
+
+  /loader/trips/{id}/checks:
+    post:
+      summary: Submit batch loading checks (ok, short, damaged)
+      operationId: submitLoadChecks
+      tags: [Loader]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchLoadCheckRequest'
+      responses:
+        '200':
+          description: Checks recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recorded_count:
+                    type: integer
+
+  /loader/trips/{id}/ack-changes:
+    post:
+      summary: Acknowledge plan changes made after loading began
+      operationId: ackTripChanges
+      tags: [Loader]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Changes acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "acknowledged"
+
+  /loader/trips/{id}/seal:
+    post:
+      summary: Seal loaded vehicle trip before departure
+      operationId: sealTrip
+      tags: [Loader]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      responses:
+        '200':
+          description: Trip sealed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trip_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    example: "sealed"
+
+  /driver/run:
+    get:
+      summary: Get full offline-capable daily run snapshot for driver
+      operationId: getDriverRun
+      tags: [Driver]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Driver run snapshot with all trips and stops
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverRunSnapshot'
+
+  /sync/push:
+    post:
+      summary: Batch push offline device delivery events
+      operationId: syncPush
+      tags: [Sync]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncPushRequest'
+      responses:
+        '200':
+          description: Per-event acknowledgements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPushResponse'
+        '429':
+          description: Rate limited with Retry-After header
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /sync/pull:
+    get:
+      summary: Delta pull server state changes
+      operationId: syncPull
+      tags: [Sync]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: State changes with next cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPullResponse'
+
+  /photos/{id}:
+    put:
+      summary: Upload delivery or damage verification photo
+      operationId: uploadPhoto
+      tags: [Photos]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pod, damage, dock_issue]
+            default: pod
+        - name: stop_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          image/*:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: Photo uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoRecord'
+        '413':
+          description: Payload too large (> 2 MB)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /events/stream:
+    get:
+      summary: Real-time Server-Sent Events stream
+      operationId: streamEvents
+      tags: [Realtime]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LastEventIDHeader'
+      responses:
+        '200':
+          description: SSE event stream
+          headers:
+            Content-Type:
+              schema:
+                type: string
+                example: "text/event-stream"
+            Cache-Control:
+              schema:
+                type: string
+                example: "no-cache"
+            Connection:
+              schema:
+                type: string
+                example: "keep-alive"
+            X-Accel-Buffering:
+              schema:
+                type: string
+                example: "no"
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /admin/demo/reset:
+    post:
+      summary: Reset database and re-seed deterministic demo day
+      operationId: resetDemo
+      tags: [Demo]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Demo environment reset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "reset_completed"
+                  demo_date:
+                    type: string
+                    example: "2026-10-05"
+
+  /admin/demo/clock:
+    post:
+      summary: Set simulated demo time
+      operationId: setDemoClock
+      tags: [Demo]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - simulated_now
+              properties:
+                simulated_now:
+                  type: string
+                  format: date-time
+                  example: "2026-10-05T15:55:00+05:30"
+      responses:
+        '200':
+          description: Simulated clock updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  simulated_now:
+                    type: string
+                    format: date-time
+
+  /admin/demo/advance:
+    post:
+      summary: Advance simulated demo time by minutes
+      operationId: advanceDemoClock
+      tags: [Demo]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - minutes
+              properties:
+                minutes:
+                  type: integer
+                  example: 15
+      responses:
+        '200':
+          description: Simulated clock advanced
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  simulated_now:
+                    type: string
+                    format: date-time

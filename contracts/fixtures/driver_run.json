@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-05",
+  "depot": "Peliyagoda",
+  "vehicle_id": "VEH-001",
+  "plan_id": "01923c8a-1000-7000-8000-000000000001",
+  "plan_version": 1,
+  "trips": [
+    {
+      "trip_id": "01923c8a-2000-7000-8000-000000000001",
+      "trip_no": 1,
+      "status": "planned",
+      "stops": [
+        {
+          "stop_id": "01923c8a-3000-7000-8000-000000000001",
+          "seq": 1,
+          "outlet_id": "OUT-FRESH-001",
+          "brand": "Fresh",
+          "district": "Colombo",
+          "dock_type": "street",
+          "parking_constraint": "normal",
+          "window_open": "04:00:00",
+          "window_close": "08:00:00",
+          "eta": "2026-10-05T04:24:00+05:30",
+          "receipt_salt": "9a8b7c6d5e4f3a2b",
+          "receipt_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "pending",
+          "contact_phone": "+94 11 234 5678",
+          "lines": [
+            {
+              "line_no": 1,
+              "sku": "SKU-FRESH-MILK-1L",
+              "name": "Fresh Full Cream Milk 1L",
+              "qty": 50,
+              "weight_g": 52500,
+              "volume_ul": 60000000,
+              "temp_requirement": "chilled"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+district,depot,road_class,free_flow_kmh,depot_to_district_km,depot_to_district_freeflow_min,inter_stop_km,inter_stop_freeflow_min
+Colombo,Peliyagoda,A,45.0,15.0,24,4.0,8
+Gampaha,Peliyagoda,A,50.0,25.0,37,6.0,9
+Kalutara,Peliyagoda,A,55.0,42.0,50,8.0,12
+Kandy,Kandy,B,35.0,8.0,15,3.5,7
+Matale,Kandy,B,40.0,30.0,45,7.0,10
+Nuwara Eliya,Kandy,C,30.0,65.0,75,9.0,15
