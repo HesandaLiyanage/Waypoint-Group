@@ -18,5 +18,6 @@ func TestConfig_Load(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.Equal(t, "9090", cfg.Port)
-	assert.True(t, cfg.DemoMode)
+	assert.False(t, cfg.DemoMode)
+	assert.Equal(t, "2026-06-21T15:00:00+05:30", cfg.BusinessNow)
 }
