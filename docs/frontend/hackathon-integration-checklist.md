@@ -78,7 +78,7 @@ Scope agreed 4 October 2026: finish the driver frontend; backend implementation 
 
 ## Validation of this frontend change
 
-Open `http://localhost:3000/?role=driver#/driver/route` after `pnpm --filter web dev`. Start the demo trip, mark arrival while parked, check each item, enter recipient name and demo code 4829. To exercise discrepancies, reduce a received quantity and supply a reason. To exercise a blocked bay, report an issue and verify that the current stop remains open.
+Sign in as the driver account, then open `http://localhost:3000/#/driver/route` after `pnpm --filter web dev`. Start the demo trip, mark arrival while parked, check each item, enter recipient name and demo code 4829. To exercise discrepancies, reduce a received quantity and supply a reason. To exercise a blocked bay, report an issue and verify that the current stop remains open.
 
 Checked with local Chrome/CDP (no Playwright installed): full three-stop flow; departure/arrival guards; required item checks; shortfall reason; wrong and correct receipt codes; partial versus full receipt; incident retained without automatic delivery; finish-trip gating; zero accepted goods blocked. Seven screens checked at 320, 390, 768 and 1440px without horizontal overflow or runtime exceptions. Photo selection is implemented with a session-only File and preview; server upload is not implemented or validated.
 
