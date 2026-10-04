@@ -17,8 +17,8 @@ export function ShellHeader() {
     navigationItems={isStore ? storeNavigation : []}
     locale={locale}
     onLocaleChange={setLocale}
-    syncStatus={isSyncing ? 'syncing' : isOnline ? 'connected' : 'offline'}
-    pendingCount={pendingCount}
+    syncStatus={activeRole === 'driver' ? 'demo' : isSyncing ? 'syncing' : isOnline ? 'connected' : 'offline'}
+    pendingCount={activeRole === 'driver' ? 0 : pendingCount}
     onSync={() => { void triggerSync(); }}
     account={{ name: currentUser.name, roleLabel: t(`roles.${activeRole}`, activeRole), detail: currentUser.email }}
   />;

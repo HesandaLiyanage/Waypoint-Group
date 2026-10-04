@@ -3,11 +3,11 @@ import { LOCALES, type Locale } from '@waypoint/i18n';
 import { formatColomboTime } from '@waypoint/domain';
 import { roleNavigation, type NavigationItem, type OperationalRole } from './navigation';
 
-export type SyncStatus = 'connected' | 'syncing' | 'offline' | 'idle';
+export type SyncStatus = 'connected' | 'syncing' | 'offline' | 'idle' | 'demo';
 const syncLabels: Record<Locale, Record<SyncStatus, string>> = {
-  en: { connected: 'Online', syncing: 'Syncing changes', offline: 'Offline', idle: 'Not connected' },
-  si: { connected: 'මාර්ගගතයි', syncing: 'සමමුහුර්ත වෙමින්', offline: 'නොබැඳියි', idle: 'සම්බන්ධ වී නැත' },
-  ta: { connected: 'இணையத்தில்', syncing: 'ஒத்திசைக்கிறது', offline: 'இணைப்பில்லை', idle: 'இணைக்கப்படவில்லை' },
+  en: { connected: 'Online', syncing: 'Syncing changes', offline: 'Offline', idle: 'Not connected', demo: 'Demo' },
+  si: { connected: 'මාර්ගගතයි', syncing: 'සමමුහුර්ත වෙමින්', offline: 'නොබැඳියි', idle: 'සම්බන්ධ වී නැත', demo: 'Demo' },
+  ta: { connected: 'இணையத்தில்', syncing: 'ஒத்திசைக்கிறது', offline: 'இணைப்பில்லை', idle: 'இணைக்கப்படவில்லை', demo: 'Demo' },
 };
 export function BrandLogo({ href = '#/dispatcher/home' }: { href?: string }) {
   return <a className="wp-brand" href={href} aria-label="Waypoint Fresh home"><img src="/assets/brand/waypoint-fresh.png" alt="Waypoint Fresh" width="372" height="80" /></a>;
