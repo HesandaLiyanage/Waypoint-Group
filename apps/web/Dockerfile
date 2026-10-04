@@ -6,7 +6,7 @@ RUN corepack enable && corepack prepare pnpm@11.6.0 --activate
 WORKDIR /app
 
 # Copy root workspace and package files
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/ ./packages/
 COPY apps/web/package.json ./apps/web/
 
@@ -16,8 +16,8 @@ RUN pnpm install --frozen-lockfile=false
 # Copy web source code
 COPY apps/web/ ./apps/web/
 
-# Build PWA
-RUN pnpm --filter web build
+# Build PWA and all workspace dependencies in dependency order
+RUN pnpm -r build
 
 # Production static server stage
 FROM nginx:alpine

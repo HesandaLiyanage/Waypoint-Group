@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.26-alpine AS builder
+FROM golang:alpine AS builder
 
 WORKDIR /app
 
@@ -21,6 +21,7 @@ ENV TZ=Asia/Colombo
 
 WORKDIR /app
 RUN mkdir -p /app/data/photos
+COPY db/seed/data /app/db/seed/data
 COPY --from=builder /bin/waypoint-api /usr/local/bin/waypoint-api
 
 EXPOSE 8080
