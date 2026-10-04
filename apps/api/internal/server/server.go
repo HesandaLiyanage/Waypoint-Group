@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -22,6 +21,7 @@ import (
 	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/ordering"
 	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/planning"
 	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/auth"
+	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/tz"
 	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/clock"
 	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/config"
 	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/outbox"
@@ -139,7 +139,17 @@ func (s *Server) AuthLogin(ctx context.Context, request api.AuthLoginRequestObje
 	err := s.pool.QueryRow(ctx, query, email).Scan(
 		&uID, &name, &pwHash, &roleStr, &depotStr, &outletStr, &vehicleStr, &localeStr, &active, &createdAt,
 	)
-	if err != nil || !active {
+	if err != nil {
+		return api.AuthLogin401ApplicationProblemPlusJSONResponse(
+			problem("INVALID_CREDENTIALS", "Invalid Credentials", http.StatusUnauthorized, "Invalid email or password", nil),
+		), nil
+	}
+	if !active {
+		if okPending, _ := auth.VerifyPassword(password, pwHash); okPending {
+			return api.AuthLogin401ApplicationProblemPlusJSONResponse(
+				problem("ACCOUNT_PENDING", "Account pending", http.StatusUnauthorized, "Your account is waiting for approval by your depot coordinator.", nil),
+			), nil
+		}
 		return api.AuthLogin401ApplicationProblemPlusJSONResponse(
 			problem("INVALID_CREDENTIALS", "Invalid Credentials", http.StatusUnauthorized, "Invalid email or password", nil),
 		), nil
@@ -453,9 +463,20 @@ func (s *Server) ListCatalog(ctx context.Context, request api.ListCatalogRequest
 
 func (s *Server) CreateOrder(ctx context.Context, request api.CreateOrderRequestObject) (api.CreateOrderResponseObject, error) {
 	u := auth.GetUser(ctx)
-	creatorID := uuid.MustParse("00000000-0000-0000-0000-000000000004")
-	if u != nil {
-		creatorID = u.ID
+	if u == nil {
+		return nil, ErrUnauthenticated
+	}
+	creatorID := u.ID
+	// A store manager orders only for their own outlet; a dispatcher may enter phone orders for outlets of their depot.
+	var outletDepot string
+	if err := s.pool.QueryRow(ctx, `SELECT depot FROM outlets WHERE outlet_id=$1`, request.Body.OutletId).Scan(&outletDepot); err != nil {
+		return api.CreateOrder400ApplicationProblemPlusJSONResponse(
+			problem("UNKNOWN_OUTLET", "Unknown outlet", http.StatusBadRequest, "Outlet "+request.Body.OutletId+" does not exist", nil)), nil
+	}
+	allowed := (u.Role == auth.RoleStoreManager && u.OutletID != nil && *u.OutletID == request.Body.OutletId) ||
+		(u.Role == auth.RoleDispatcher && (u.Depot == nil || *u.Depot == outletDepot))
+	if !allowed {
+		return nil, fmt.Errorf("%w: you may only place orders for your own outlet", ErrForbidden)
 	}
 
 	var items []ordering.OrderItemInput
@@ -591,14 +612,22 @@ func (s *Server) CancelOrder(ctx context.Context, request api.CancelOrderRequest
 }
 
 func (s *Server) GetStoreSchedule(ctx context.Context, request api.GetStoreScheduleRequestObject) (api.GetStoreScheduleResponseObject, error) {
-	outletID := "OUT-FRESH-001"
-	if request.Params.OutletId != nil {
+	u := auth.GetUser(ctx)
+	if u == nil {
+		return nil, ErrUnauthenticated
+	}
+	// A store manager may only read their own outlet's schedule.
+	outletID := ""
+	if u.OutletID != nil {
+		outletID = *u.OutletID
+	}
+	if request.Params.OutletId != nil && (u.Role != auth.RoleStoreManager || *request.Params.OutletId == outletID) {
 		outletID = *request.Params.OutletId
 	}
 
 	var stops []api.StoreScheduleStop
 	rows, err := s.pool.Query(ctx, `
-		SELECT o.id, o.ref, o.status, ts.window_open::text, ts.window_close::text, ts.eta, COALESCE(sr.receipt_code, '482913')
+		SELECT o.id, o.ref, o.status, ts.window_open::text, ts.window_close::text, ts.eta, ''
 		FROM orders o
 		LEFT JOIN trip_stops ts ON ts.order_id = o.id
 		LEFT JOIN stop_receipts sr ON sr.stop_id = ts.id
@@ -608,7 +637,7 @@ func (s *Server) GetStoreSchedule(ctx context.Context, request api.GetStoreSched
 		defer rows.Close()
 		for rows.Next() {
 			var oID uuid.UUID
-			var oRef, status, wOpen, wClose, rCode string
+			var oRef, status, wOpen, wClose, rCode string // rCode is unused: codes are shown only through the workspace
 			var etaT *time.Time
 			if err := rows.Scan(&oID, &oRef, &status, &wOpen, &wClose, &etaT, &rCode); err == nil {
 				src := api.StoreScheduleStopEtaSource("rule")
@@ -622,7 +651,6 @@ func (s *Server) GetStoreSchedule(ctx context.Context, request api.GetStoreSched
 					Eta:          etaT,
 					EtaSource:    &src,
 					EtaBufferMin: &buf,
-					ReceiptCode:  &rCode,
 				})
 			}
 		}
@@ -793,20 +821,9 @@ func (s *Server) GeneratePlan(ctx context.Context, request api.GeneratePlanReque
 		strat = planning.StrategyMaxServed
 	}
 
-	ref, err := s.fetchRefData(ctx)
+	ref, err := s.planningRef(ctx, dateStr)
 	if err != nil {
 		return nil, err
-	}
-
-	// Apply monsoon multiplier if monsoon condition is active on this plan date (ASM-005)
-	var monsoon int
-	_ = s.pool.QueryRow(ctx, `SELECT monsoon FROM calendar_days WHERE date = $1::date`, dateStr).Scan(&monsoon)
-	if monsoon == 1 {
-		for k, dt := range ref.DistrictTravel {
-			dt.DepotToDistrictFreeflowMin = int(math.Round(float64(dt.DepotToDistrictFreeflowMin) * 1.15))
-			dt.InterStopFreeflowMin = int(math.Round(float64(dt.InterStopFreeflowMin) * 1.15))
-			ref.DistrictTravel[k] = dt
-		}
 	}
 
 	ordersCtx, err := s.fetchOrdersForPlanning(ctx, depot, dateStr)
@@ -819,20 +836,26 @@ func (s *Server) GeneratePlan(ctx context.Context, request api.GeneratePlanReque
 		return nil, err
 	}
 
-	defFresh, _ := time.Parse("15:04", s.cfg.FreshDepartDefault)
-	defStyle, _ := time.Parse("15:04", s.cfg.StyleTechDepartDefault)
+	defFresh, err := departureOn(dateStr, s.cfg.FreshDepartDefault)
+	if err != nil {
+		return nil, err
+	}
+	defStyle, err := departureOn(dateStr, s.cfg.StyleTechDepartDefault)
+	if err != nil {
+		return nil, err
+	}
 
-	res, err := planning.Plan(ctx, depot, dateStr, strat, ordersCtx, ref, fuelRemaining, defFresh, defStyle, s.cfg.ReloadBufferMin)
+	res, err := planning.Plan(ctx, depot, dateStr, strat, ordersCtx, ref, fuelRemaining, defFresh, defStyle, s.cfg.ReloadBufferMin, planning.WithMaxStopsPerTrip(s.cfg.MaxStopsPerTrip))
 	if err != nil {
 		return nil, err
 	}
 
 	planID := res.Plan.ID
 	u := auth.GetUser(ctx)
-	creatorID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	if u != nil {
-		creatorID = u.ID
+	if u == nil {
+		return nil, ErrUnauthenticated
 	}
+	creatorID := u.ID
 
 	summaryJSON, _ := json.Marshal(res.Summary)
 
@@ -842,15 +865,30 @@ func (s *Server) GeneratePlan(ctx context.Context, request api.GeneratePlanReque
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
+	// A regenerated plan supersedes earlier drafts; a published plan is never replaced here.
+	var published bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM plans WHERE depot=$1 AND plan_date=$2::date AND status='published')`, depot, dateStr).Scan(&published); err != nil {
+		return nil, err
+	}
+	if published {
+		return nil, errors.New("a plan is already published for this depot and date")
+	}
+	if _, err = tx.Exec(ctx, `UPDATE plans SET status='superseded' WHERE depot=$1 AND plan_date=$2::date AND status='draft'`, depot, dateStr); err != nil {
+		return nil, err
+	}
+	var nextVersion int
+	if err = tx.QueryRow(ctx, `SELECT COALESCE(MAX(version),0)+1 FROM plans WHERE depot=$1 AND plan_date=$2::date`, depot, dateStr).Scan(&nextVersion); err != nil {
+		return nil, err
+	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO plans (id, depot, plan_date, version, status, strategy, summary, created_by)
-		VALUES ($1, $2, $3::date, 1, 'draft', $4, $5, $6)
-	`, planID, depot, dateStr, string(strat), summaryJSON, creatorID)
+		VALUES ($1, $2, $3::date, $4, 'draft', $5, $6, $7)
+	`, planID, depot, dateStr, nextVersion, string(strat), summaryJSON, creatorID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert plan: %w", err)
 	}
 
-	baseDate, _ := time.Parse("2006-01-02", dateStr)
+	baseDate, _ := time.ParseInLocation("2006-01-02", dateStr, tz.Colombo)
 
 	for _, t := range res.Plan.Trips {
 		dtKey := fmt.Sprintf("%s:%s", t.District, depot)
@@ -1128,6 +1166,22 @@ func (s *Server) ValidatePlan(ctx context.Context, request api.ValidatePlanReque
 }
 
 func (s *Server) PublishPlan(ctx context.Context, request api.PublishPlanRequestObject) (api.PublishPlanResponseObject, error) {
+	if planData, err := s.loadPlanDataFromDB(ctx, request.Id); err == nil {
+		if ref, err := s.planningRef(ctx, planData.PlanDate); err == nil {
+			fuel, _ := s.fetchFuelRemaining(ctx, planData.Depot, planData.PlanDate)
+			var hard []string
+			for _, v := range planning.Validate(planData, ref, fuel) {
+				if v.Severity == planning.SeverityHard {
+					hard = append(hard, v.Message)
+				}
+			}
+			if len(hard) > 0 {
+				return api.PublishPlan422ApplicationProblemPlusJSONResponse(
+					problem("PLAN_INVALID", "Plan violates operating constraints", http.StatusUnprocessableEntity,
+						fmt.Sprintf("%d hard violation(s): %s", len(hard), hard[0]), nil)), nil
+			}
+		}
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -1194,7 +1248,7 @@ func (s *Server) PublishPlan(ctx context.Context, request api.PublishPlanRequest
 	`, request.Id)
 
 	// Reserve fuel in fuel_ledger for each trip
-	pDateT, _ := time.Parse("2006-01-02", planDate)
+	pDateT, _ := time.ParseInLocation("2006-01-02", planDate, tz.Colombo)
 	isoY, isoW := pDateT.ISOWeek()
 	_, _ = tx.Exec(ctx, `
 		INSERT INTO fuel_ledger (vehicle_id, iso_year, iso_week, trip_id, liters_ml, kind)
@@ -1203,35 +1257,7 @@ func (s *Server) PublishPlan(ctx context.Context, request api.PublishPlanRequest
 		WHERE plan_id = $1
 	`, request.Id, isoY, isoW)
 
-	// Generate and save 6-digit PoD receipts with plaintext receipt_code
-	rows, err := tx.Query(ctx, `SELECT id FROM trip_stops WHERE plan_id = $1`, request.Id)
-	if err == nil {
-		var stopIDs []uuid.UUID
-		for rows.Next() {
-			var sid uuid.UUID
-			if err := rows.Scan(&sid); err == nil {
-				stopIDs = append(stopIDs, sid)
-			}
-		}
-		rows.Close()
-
-		for _, sid := range stopIDs {
-			code := fmt.Sprintf("%06d", pseudoRandomInt()%1000000)
-			salt, _ := auth.GenerateRandomToken(16)
-			h := hmac.New(sha256.New, []byte(salt))
-			h.Write([]byte(code))
-			hash := hex.EncodeToString(h.Sum(nil))
-
-			_, _ = tx.Exec(ctx, `
-				INSERT INTO stop_receipts (stop_id, code_salt, code_hash, receipt_code, issued_at)
-				VALUES ($1, $2, $3, $4, $5)
-				ON CONFLICT (stop_id) DO UPDATE SET
-					code_salt = EXCLUDED.code_salt,
-					code_hash = EXCLUDED.code_hash,
-					receipt_code = EXCLUDED.receipt_code
-			`, sid, salt, hash, code, now)
-		}
-	}
+	// Receipt codes are issued by the store manager on arrival (workflow command receipt_code), never at publish.
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
@@ -1685,10 +1711,10 @@ func (s *Server) SealTrip(ctx context.Context, request api.SealTripRequestObject
 
 func (s *Server) GetDriverRun(ctx context.Context, request api.GetDriverRunRequestObject) (api.GetDriverRunResponseObject, error) {
 	u := auth.GetUser(ctx)
-	vehicleID := "VEH-001"
-	if u != nil && u.VehicleID != nil {
-		vehicleID = *u.VehicleID
+	if u == nil || u.VehicleID == nil {
+		return nil, fmt.Errorf("%w: a driver session bound to a vehicle is required", ErrForbidden)
 	}
+	vehicleID := *u.VehicleID
 
 	dateStr := s.clk.Now().Format("2006-01-02")
 
@@ -1834,12 +1860,7 @@ func (s *Server) GetDriverRun(ctx context.Context, request api.GetDriverRunReque
 func (s *Server) SyncPush(ctx context.Context, request api.SyncPushRequestObject) (api.SyncPushResponseObject, error) {
 	u := auth.GetUser(ctx)
 	if u == nil {
-		u = &auth.AuthUser{
-			ID:        uuid.MustParse("00000000-0000-0000-0000-000000000003"),
-			Email:     "driver@waypoint.local",
-			Role:      auth.RoleDriver,
-			VehicleID: strPtr("VEH-001"),
-		}
+		return nil, ErrUnauthenticated
 	}
 
 	var events []syncpkg.DeviceEventInput
@@ -2147,7 +2168,7 @@ func (s *Server) fetchOrdersForPlanning(ctx context.Context, depot, dateStr stri
 }
 
 func (s *Server) fetchFuelRemaining(ctx context.Context, depot, planDateStr string) (map[string]int64, error) {
-	t, err := time.Parse("2006-01-02", planDateStr)
+	t, err := time.ParseInLocation("2006-01-02", planDateStr, tz.Colombo)
 	if err != nil {
 		return nil, err
 	}
@@ -2420,3 +2441,36 @@ func pseudoRandomInt() int {
 	_, _ = rand.Read(b)
 	return int(b[0])<<24 | int(b[1])<<16 | int(b[2])<<8 | int(b[3])
 }
+
+// departureOn anchors a configured HH:MM departure to the plan date in Colombo business time.
+func departureOn(date, hhmm string) (time.Time, error) {
+	t, err := time.ParseInLocation("2006-01-02 15:04", date+" "+hhmm, tz.Colombo)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid departure %q on %s: %w", hhmm, date, err)
+	}
+	return t, nil
+}
+
+// planningRef loads reference data and applies the monsoon travel buffer (ASM-HK-01) for the plan date.
+func (s *Server) planningRef(ctx context.Context, dateStr string) (planning.RefData, error) {
+	ref, err := s.fetchRefData(ctx)
+	if err != nil {
+		return ref, err
+	}
+	var monsoon int
+	_ = s.pool.QueryRow(ctx, `SELECT monsoon FROM calendar_days WHERE date = $1::date`, dateStr).Scan(&monsoon)
+	if monsoon == 1 {
+		for k, dt := range ref.DistrictTravel {
+			dt.DepotToDistrictFreeflowMin = int(math.Round(float64(dt.DepotToDistrictFreeflowMin) * s.cfg.MonsoonTravelFactor))
+			dt.InterStopFreeflowMin = int(math.Round(float64(dt.InterStopFreeflowMin) * s.cfg.MonsoonTravelFactor))
+			ref.DistrictTravel[k] = dt
+		}
+	}
+	return ref, nil
+}
+
+// Sentinel errors mapped to HTTP statuses by the response error handler.
+var (
+	ErrUnauthenticated = errors.New("authentication required")
+	ErrForbidden       = errors.New("forbidden")
+)

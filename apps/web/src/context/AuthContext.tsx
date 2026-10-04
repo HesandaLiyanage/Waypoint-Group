@@ -1,87 +1,51 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, UserRole } from '@waypoint/domain';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import {
+  Role,
+  SessionUser,
+  getSession,
+  login as apiLogin,
+  loginOutlet as apiLoginOutlet,
+  logout as apiLogout,
+  pinLogin as apiPinLogin,
+  setSessionLostHandler,
+} from '../api/http';
 
 interface AuthContextType {
-  currentUser: User;
-  activeRole: UserRole;
-  setRole: (role: UserRole) => void;
-  token: string;
+  currentUser: SessionUser | null;
+  activeRole: Role | null;
+  login: (email: string, password: string) => Promise<void>;
+  loginOutlet: (outletId: string, password: string) => Promise<void>;
+  pinLogin: (identifier: string, pin: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
-
-const mockRoleUsers: Record<UserRole, User> = {
-  admin: {
-    id: 'usr-0001-admin',
-    email: 'admin@waypoint.local',
-    name: 'Hesanda Liyanage (Admin)',
-    role: 'admin',
-    phone: '+94 11 234 5678',
-    createdAt: new Date().toISOString(),
-  },
-  dispatcher: {
-    id: 'usr-0002-dispatcher',
-    email: 'dispatcher@waypoint.local',
-    name: 'Kavindu Perera (Dispatcher)',
-    role: 'dispatcher',
-    phone: '+94 11 234 5679',
-    createdAt: new Date().toISOString(),
-  },
-  field_agent: {
-    id: 'usr-0003-field',
-    email: 'field@waypoint.local',
-    name: 'Nuwan Silva (Field Inspector)',
-    role: 'field_agent',
-    phone: '+94 77 123 4567',
-    createdAt: new Date().toISOString(),
-  },
-  loader: {
-    id: 'usr-0005-loader',
-    email: 'loader.peliyagoda@waypoint.local',
-    name: 'Peliyagoda Dock Loader',
-    role: 'loader',
-    phone: '+94 11 234 5680',
-    createdAt: new Date().toISOString(),
-  },
-  store_manager: {
-    id: 'usr-0006-store',
-    email: 'store.fresh001@waypoint.local',
-    name: 'Store Manager OUT047',
-    role: 'store_manager',
-    phone: '+94 11 234 5681',
-    createdAt: new Date().toISOString(),
-  },
-  driver: {
-    id: 'usr-0004-driver',
-    email: 'driver@waypoint.local',
-    name: 'Sunil Fernando (Logistics Driver)',
-    role: 'driver',
-    phone: '+94 71 987 6543',
-    createdAt: new Date().toISOString(),
-  },
-};
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+// Identity comes only from the server: no role switching, no mock users.
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeRole, setActiveRole] = useState<UserRole>(() => {
-    // Open the Loader view with http://localhost:3000/?role=loader
-    const fromUrl = new URLSearchParams(window.location.search).get('role') as UserRole | null;
-    if (fromUrl && fromUrl in mockRoleUsers) {
-      localStorage.setItem('wp_active_role', fromUrl);
-      return fromUrl;
-    }
-    return (localStorage.getItem('wp_active_role') as UserRole) || 'admin';
-  });
+  const [user, setUser] = useState<SessionUser | null>(() => getSession()?.user ?? null);
 
-  const setRole = (role: UserRole) => {
-    setActiveRole(role);
-    localStorage.setItem('wp_active_role', role);
-  };
+  useEffect(() => {
+    setSessionLostHandler(() => setUser(null));
+    return () => setSessionLostHandler(null);
+  }, []);
 
-  const currentUser = mockRoleUsers[activeRole];
-  const token = `wp_token_${activeRole}_${currentUser.id}`;
+  const login = useCallback(async (email: string, password: string) => {
+    setUser((await apiLogin(email, password)).user);
+  }, []);
+  const loginOutlet = useCallback(async (outletId: string, password: string) => {
+    setUser((await apiLoginOutlet(outletId, password)).user);
+  }, []);
+  const pinLogin = useCallback(async (identifier: string, pin: string) => {
+    setUser((await apiPinLogin(identifier, pin)).user);
+  }, []);
+  const logout = useCallback(async () => {
+    await apiLogout();
+    setUser(null);
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ currentUser, activeRole, setRole, token }}>
+    <AuthContext.Provider value={{ currentUser: user, activeRole: user?.role ?? null, login, loginOutlet, pinLogin, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -36,14 +36,23 @@ curl -s http://localhost:8080/readyz | jq
 
 ## 2. Pre-Seeded Demo Accounts
 
-The database seeds automatically on boot with the authoritative reference dataset (120 outlets, 60 vehicles, October 2026 operating calendar) and verified demo accounts:
+On boot the API loads the official challenge master data (120 outlets, 60 vehicles, 910 calendar days, 2024-01-01 to 2026-06-28) and refuses to start if the counts or IDs do not match. The business clock starts at `BUSINESS_NOW` (default 2026-06-21 15:00 Colombo, one hour before the 16:00 cutoff for the 2026-06-22 run).
 
-| Role | Email | Password | PIN | Context / Assignment |
-|---|---|---|---|---|
+All accounts use the password in `BOOTSTRAP_PASSWORD` (default in `.env.example`: `WaypointJudge2026!`). The loader also signs in with PIN `1234`.
+
+| Role | Email | Context |
+|---|---|---|
+| Dispatcher | `dispatcher@waypoint.local` | Peliyagoda depot |
+| Loader | `loader@waypoint.local` | Peliyagoda dock (shared terminal) |
+| Driver | `driver@waypoint.local` | `VEH035`, Peliyagoda reefer van |
+| Store manager | `store@waypoint.local` | `OUT001`, Fresh Colombo (van-only) |
+| Store manager | `store.deferred@waypoint.local` | `OUT055`, Fresh Galle |
+
+---|---|---|---|---|
 | **Central Dispatcher** | `dispatcher@waypoint.local` | `pass1234` | — | Peliyagoda & Network-wide Dispatch |
 | **Dock Loader** | `loader.peliyagoda@waypoint.local` | `pass1234` | `1234` | Peliyagoda Depot Loading Dock |
-| **Driver** | `driver.001@waypoint.local` | `pass1234` | `1234` | Lead Reefer Truck `VEH-001` |
-| **Store Manager** | `store.fresh001@waypoint.local` | `pass1234` | — | Outlet `OUT-FRESH-001` (Colombo) |
+| **Driver** | `driver.001@waypoint.local` | `pass1234` | `1234` | Lead Reefer Truck `VEH035` |
+| **Store Manager** | `store.fresh001@waypoint.local` | `pass1234` | — | Outlet `OUT001` (Colombo) |
 | **Store Manager (Deferred)** | `store.deferred@waypoint.local` | `pass1234` | — | Deferred Outlet (Fairness Test) |
 
 ---
@@ -59,7 +68,7 @@ Follow this 5-step walkthrough to test the end-to-end operational lifecycle:
 ### Step 1: Store Manager Places Order
 1. Login as `store.fresh001@waypoint.local` (`pass1234`).
 2. Submit a mixed basket of ambient goods and chilled dairy/produce for `2026-10-05`.
-3. Notice: The backend ordering engine splits Fresh multi-temperature baskets into linked ambient and chilled orders, computing server-side line weights, volumes, and 6-digit PoD verification codes.
+3. Notice: The backend ordering engine splits Fresh multi-temperature baskets into linked ambient and chilled orders, computing server-side line weights, volumes, and four-digit PoD verification codes.
 
 ### Step 2: Dispatcher Cutoff & Algorithmic Planning
 1. Login as `dispatcher@waypoint.local` (`pass1234`).
@@ -72,7 +81,7 @@ Follow this 5-step walkthrough to test the end-to-end operational lifecycle:
 
 ### Step 3: Dock Loader Pre-Departure Verification
 1. Login as `loader.peliyagoda@waypoint.local` (PIN `1234`).
-2. Open Trip 1 for vehicle `VEH-001`.
+2. Open Trip 1 for vehicle `VEH035`.
 3. View the reverse-loading sequence manifest (`GET /api/v1/loader/trips/{id}/manifest`): last drop stop is loaded first at the front of the truck bed.
 4. Record loading item checks (`POST /api/v1/loader/trips/{id}/checks`).
 5. Seal the trip (`POST /api/v1/loader/trips/{id}/seal`).
@@ -86,7 +95,7 @@ Follow this 5-step walkthrough to test the end-to-end operational lifecycle:
    - Outbox emits domain events; dispatcher dashboard updates live via Server-Sent Events (`GET /api/v1/events/stream`).
 
 ### Step 5: Store Manager Delivery Confirmation
-1. Store manager receives arrival notice and verifies the 6-digit offline receipt code (`482910`).
+1. Store manager receives arrival notice and verifies the four-digit offline receipt code (`482910`).
 2. Store manager confirms delivery (`POST /api/v1/orders/{id}/confirm-receipt`).
 
 ---

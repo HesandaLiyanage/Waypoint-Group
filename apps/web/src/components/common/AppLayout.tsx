@@ -44,9 +44,9 @@ export function RoleNavigation({ role, activeId, locale, items = roleNavigation[
 export interface AppLayoutProps {
   role?: OperationalRole; activeId: string; locale: Locale; onLocaleChange: (locale: Locale) => void;
   syncStatus: SyncStatus; pendingCount?: number; onSync?: () => void; navigationItems?: NavigationItem[];
-  account: { name: string; roleLabel: string; detail?: string }; depotLabel?: string; children: ReactNode;
+  account: { name: string; roleLabel: string; detail?: string }; onSignOut?: () => void; depotLabel?: string; children: ReactNode;
 }
-export function AppHeader({ role, activeId, locale, onLocaleChange, syncStatus, pendingCount = 0, onSync, navigationItems, account }: Omit<AppLayoutProps, 'children'>) {
+export function AppHeader({ role, activeId, locale, onLocaleChange, syncStatus, pendingCount = 0, onSync, navigationItems, account, onSignOut }: Omit<AppLayoutProps, 'children'>) {
   const items = navigationItems ?? (role ? roleNavigation[role] : []);
   const navigationRole = role ?? 'dispatcher';
   const [menuOpen, setMenuOpen] = useState(false);
@@ -68,7 +68,7 @@ export function AppHeader({ role, activeId, locale, onLocaleChange, syncStatus, 
       </div>
       <div className="wp-account-wrap">
         <button type="button" className="wp-account" aria-label="Account details" aria-expanded={accountOpen} aria-controls="wp-account-panel" onClick={() => setAccountOpen(!accountOpen)}><img src="/assets/icons/account.svg" width="20" height="20" alt="" /></button>
-        {accountOpen && <div id="wp-account-panel" className="wp-account-panel"><strong>{account.name}</strong><span>{account.roleLabel}</span>{account.detail && <small>{account.detail}</small>}</div>}
+        {accountOpen && <div id="wp-account-panel" className="wp-account-panel"><strong>{account.name}</strong><span>{account.roleLabel}</span>{account.detail && <small>{account.detail}</small>}{onSignOut && <button type="button" className="wp-btn wp-btn-secondary" onClick={onSignOut}>Sign out</button>}</div>}
       </div>
     </div>
     {items.length > 0 && <><button type="button" className="wp-menu-toggle" aria-expanded={menuOpen} aria-controls="wp-mobile-navigation" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? 'Close' : 'Menu'}<span aria-hidden="true">{menuOpen ? '×' : '☰'}</span></button>

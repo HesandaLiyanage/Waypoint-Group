@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/tz"
+
 	"github.com/google/uuid"
 )
 
@@ -18,6 +20,13 @@ const (
 	StrategyFairnessFirst Strategy = "fairness_first"
 	StrategyMaxServed     Strategy = "max_served"
 )
+
+// PlanOption tunes a planning run without changing the operating rules.
+type PlanOption func(*planOptions)
+type planOptions struct{ maxStopsPerTrip int }
+
+// WithMaxStopsPerTrip caps how many stops one trip may carry (0 means no cap). It is a walkthrough aid, not a booklet rule.
+func WithMaxStopsPerTrip(n int) PlanOption { return func(o *planOptions) { o.maxStopsPerTrip = n } }
 
 type OrderPlanningContext struct {
 	Order               PlanOrder
@@ -67,7 +76,12 @@ func Plan(
 	defaultFreshDepart time.Time,
 	defaultStyleTechDepart time.Time,
 	reloadBufferMin int,
+	opts ...PlanOption,
 ) (*PlannerResult, error) {
+	var po planOptions
+	for _, o := range opts {
+		o(&po)
+	}
 
 	// 1. Sort orders according to lexicographic priority policy (Section 5.8)
 	sortOrdersByPriority(orders, strategy)
@@ -138,9 +152,16 @@ func Plan(
 
 		var bestBindingCode = CodeNoVehicleAtDepot
 		var bestBindingParams map[string]interface{}
+		// The reported reason must be the real limit: a vehicle that lacks the needed attribute (refrigeration,
+		// van access) is only blamed when no suitable vehicle exists at all.
+		attrCode := CodeNoVehicleAtDepot
+		suitableSeen, exhausted := false, false
 
 		for i, trip := range plan.Trips {
 			if trip.Brand != ord.Brand || trip.District != district {
+				continue
+			}
+			if po.maxStopsPerTrip > 0 && len(trip.Stops) >= po.maxStopsPerTrip {
 				continue
 			}
 
@@ -182,6 +203,7 @@ func Plan(
 				// Record the most relevant binding constraint
 				bestBindingCode = violations[0].Code
 				bestBindingParams = violations[0].Params
+				suitableSeen = true
 			}
 		}
 
@@ -235,19 +257,22 @@ func Plan(
 				}
 			}
 
-			if vTripsCount >= 2 {
-				continue
-			}
-
 			// Filter vehicle constraints
 			if ord.TempRequirement == "chilled" && veh.Temp != "reefer" {
-				bestBindingCode = CodeNeedReefer
+				attrCode = CodeNeedReefer
 				continue
 			}
 			if outlet.ParkingConstraint == "van_only" && veh.Type != "van" {
-				bestBindingCode = CodeVanOnly
+				if attrCode != CodeNeedReefer {
+					attrCode = CodeVanOnly
+				}
 				continue
 			}
+			if vTripsCount >= 2 {
+				exhausted = true
+				continue
+			}
+			suitableSeen = true
 
 			// Capacity check
 			maxVolUl := int64(veh.VolumeCapM3 * 1000000000.0)
@@ -315,6 +340,13 @@ func Plan(
 
 		if !newTripOpened {
 			// Defer order and record exact binding explanation (Section 5.8)
+			if !suitableSeen {
+				if exhausted {
+					bestBindingCode = CodeMaxTrips
+				} else {
+					bestBindingCode = attrCode
+				}
+			}
 			if bestBindingParams == nil {
 				bestBindingParams = make(map[string]interface{})
 			}
@@ -442,7 +474,7 @@ func copyTrip(t PlanTrip) PlanTrip {
 }
 
 func computeNextOperatingDay(dateStr string) string {
-	t, err := time.Parse("2006-01-02", dateStr)
+	t, err := time.ParseInLocation("2006-01-02", dateStr, tz.Colombo)
 	if err != nil {
 		return dateStr
 	}

@@ -139,6 +139,19 @@ func (s *TokenService) Middleware(next http.Handler) http.Handler {
 	})
 }
 
+// RequireUser rejects requests without a valid session unless the path is public.
+func RequireUser(public func(path string) bool, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions || public(r.URL.Path) || GetUser(r.Context()) != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"type":"about:blank","title":"Unauthorized","status":401,"detail":"Sign in required"}`))
+	})
+}
+
 // Argon2id Password Hashing params
 const (
 	argonMemory      = 64 * 1024

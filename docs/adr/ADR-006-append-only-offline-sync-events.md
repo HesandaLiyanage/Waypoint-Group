@@ -12,7 +12,7 @@ Delivery drivers frequently traverse remote and hill-country areas of Sri Lanka 
 - In `POST /api/v1/sync/push`, events are processed in batches with savepoints per event: one invalid or duplicate event never aborts the batch.
 - Deduplication is guaranteed via unique index on `device_events(event_id)`. Replays return the cached ack status (`accepted | duplicate | rejected`).
 - In case of plan conflict (e.g., a stop was canceled or altered in a new plan while the driver was offline, but the driver physically delivered it), the physical fact is accepted, marked `conflict=true`, and an alert is raised to the dispatcher.
-- Offline proof of delivery uses 6-digit receipt codes: the store manager displays the code, the driver app validates it locally against an HMAC salt hash provided in the morning snapshot, and the server reverifies on sync.
+- Offline proof of delivery uses four-digit receipt codes: the store manager displays the code, the driver app validates it locally against an HMAC salt hash provided in the morning snapshot, and the server reverifies on sync.
 
 ## Consequences
 ### Positive

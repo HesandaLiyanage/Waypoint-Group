@@ -33,6 +33,7 @@ func (c *RealClock) Reset()                      {}
 type DemoClock struct {
 	mu        sync.RWMutex
 	simulated *time.Time
+	initial   *time.Time
 }
 
 func NewDemoClock(initial *time.Time) *DemoClock {
@@ -40,6 +41,8 @@ func NewDemoClock(initial *time.Time) *DemoClock {
 	if initial != nil {
 		t := tz.InColombo(*initial)
 		c.simulated = &t
+		i := t
+		c.initial = &i
 	}
 	return c
 }
@@ -75,5 +78,10 @@ func (c *DemoClock) Advance(d time.Duration) {
 func (c *DemoClock) Reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.initial != nil {
+		t := *c.initial
+		c.simulated = &t
+		return
+	}
 	c.simulated = nil
 }

@@ -1,204 +1,175 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { SyncClient } from '@waypoint/sync-core';
-import { WaypointApiClient } from '@waypoint/api-client';
-import { Waypoint, SyncMutationType } from '@waypoint/domain';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { ApiError, request } from '../api/http';
+import { OutboxItem, WorkflowCommand, deleteItem, listItems, putItem } from '../api/outbox';
 import { useAuth } from './AuthContext';
+
+// Rows returned by GET /workspace, scoped by the server to the signed-in role.
+export interface Workspace {
+  server_time: string;
+  outlets: any[];
+  vehicles: any[];
+  calendar: any[];
+  catalog: any[];
+  orders: any[];
+  lines: any[];
+  plans: any[];
+  trips: any[];
+  stops: any[];
+  checks: any[];
+  deferrals: any[];
+  issues: any[];
+  receipts: any[];
+  codes: any[];
+  capacity: any[];
+  confirmations: any[];
+  pending_users: any[];
+}
+
+export type NewCommand = Omit<WorkflowCommand, 'id'>;
 
 interface SyncContextType {
   isOnline: boolean;
   isSyncing: boolean;
   pendingCount: number;
+  rejected: OutboxItem[];
   lastSyncedAt: string | null;
-  waypoints: Waypoint[];
-  enqueueWaypointMutation: (
-    action: SyncMutationType,
-    waypoint: Partial<Waypoint> & { id: string }
-  ) => Promise<void>;
+  workspace: Workspace | null;
+  workspaceError: string | null;
+  send: (command: NewCommand) => Promise<OutboxItem>;
   triggerSync: () => Promise<void>;
-  refreshWaypoints: () => Promise<void>;
+  refresh: () => Promise<void>;
+  discard: (id: string) => Promise<void>;
 }
 
 const SyncContext = createContext<SyncContextType | null>(null);
+const POLL_MS = 15000;
 
+// Work is saved locally first, queued, sent, then acknowledged or rejected by the server.
 export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { token } = useAuth();
-  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [pendingCount, setPendingCount] = useState<number>(0);
+  const { currentUser } = useAuth();
+  const userId = currentUser?.id ?? '';
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [items, setItems] = useState<OutboxItem[]>([]);
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
-  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  const flushing = useRef(false);
+  const seq = useRef(Date.now());
 
-  // API Client
-  const apiClient = React.useMemo(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || '/api/v1';
-    return new WaypointApiClient({
-      baseUrl: apiUrl,
-      getToken: () => token,
-    });
-  }, [token]);
+  const reload = useCallback(async () => {
+    if (userId) setItems(await listItems(userId));
+  }, [userId]);
 
-  // SyncClient with IndexedDB Adapter & Transport
-  const [syncClient] = useState(() => {
-    const client = new SyncClient();
-    return client;
-  });
-
-  // Setup transport connecting syncClient to the Go modular monolith API
-  useEffect(() => {
-    syncClient.setTransport({
-      push: async (events) => {
-        return (await apiClient.pushSync({
-          client_id: `pwa_${navigator.userAgent.slice(0, 20)}`,
-          events: events.map((e) => ({
-            event_id: e.eventId,
-            entity_type: e.entityType,
-            entity_id: e.entityId,
-            action: e.action,
-            payload: e.payload,
-            client_timestamp: e.clientTimestamp,
-            version: e.version,
-          })),
-        })) as any;
-      },
-      pull: async (cursor) => {
-        const res = await apiClient.pullSync(cursor);
-        return {
-          events: res.events.map((e) => ({
-            eventId: e.event_id,
-            entityType: e.entity_type as any,
-            entityId: e.entity_id,
-            action: e.action,
-            payload: e.payload,
-            clientTimestamp: e.client_timestamp,
-            version: e.version || 1,
-          })),
-          nextCursor: res.next_cursor,
-          hasMore: res.has_more,
-        };
-      },
-    });
-  }, [syncClient, apiClient]);
-
-  // Update outbox count from IndexedDB
-  const updateStats = useCallback(async () => {
+  const refresh = useCallback(async () => {
+    if (!userId) return;
     try {
-      const stats = await syncClient.getStats();
-      setPendingCount(stats.pendingOutboxCount);
-      setLastSyncedAt(stats.lastSyncedAt);
-    } catch {
-      // IndexedDB not ready or memory fallback
+      setWorkspace(await request<Workspace>('/workspace'));
+      setWorkspaceError(null);
+      setLastSyncedAt(new Date().toISOString());
+    } catch (e) {
+      setWorkspaceError(e instanceof Error ? e.message : 'Workspace unavailable');
     }
-  }, [syncClient]);
+  }, [userId]);
 
-  // Fetch or refresh waypoints
-  const refreshWaypoints = useCallback(async () => {
-    try {
-      if (navigator.onLine) {
-        const remoteList = await apiClient.listWaypoints();
-        setWaypoints(remoteList as unknown as Waypoint[]);
-        // Cache to IndexedDB entities
-        for (const wp of remoteList) {
-          await syncClient.adapter.saveEntity('waypoint', wp.id, wp, (wp as any).version || 1);
-        }
-      } else {
-        // Load offline cached entities
-        const cached = await syncClient.adapter.getAllEntities<Waypoint>('waypoint');
-        if (cached && cached.length > 0) {
-          setWaypoints(cached);
-        }
-      }
-    } catch (err) {
-      console.warn('Network fetch failed, loading from local offline cache:', err);
-      const cached = await syncClient.adapter.getAllEntities<Waypoint>('waypoint');
-      if (cached && cached.length > 0) {
-        setWaypoints(cached);
-      }
-    }
-    await updateStats();
-  }, [apiClient, syncClient, updateStats]);
-
-  // Initialize DB and load initial waypoints
-  useEffect(() => {
-    syncClient.init().then(() => {
-      refreshWaypoints();
-    });
-  }, [syncClient, refreshWaypoints]);
-
-  // Network listener
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      triggerSync();
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  // Trigger full sync
-  const triggerSync = useCallback(async () => {
-    if (!navigator.onLine || isSyncing) return;
+  const flush = useCallback(async () => {
+    if (flushing.current || !userId) return;
+    flushing.current = true;
     setIsSyncing(true);
     try {
-      await syncClient.synchronize();
-      await refreshWaypoints();
-    } catch (err) {
-      console.error('Synchronization failed:', err);
+      for (const item of await listItems(userId)) {
+        if (item.state === 'acknowledged' || item.state === 'rejected') continue;
+        await putItem({ ...item, state: 'sending' });
+        try {
+          await request('/workflow/commands', { method: 'POST', body: JSON.stringify(item.command) });
+          await deleteItem(item.id); // acknowledged: the server now holds the record
+        } catch (e) {
+          if (e instanceof ApiError && e.network) {
+            await putItem({ ...item, state: 'queued' });
+            break; // offline: keep order, try again on reconnect
+          }
+          // The server refused it (for example PLAN_CHANGED); keep it visible for explicit reconciliation.
+          await putItem({ ...item, state: 'rejected', error: e instanceof Error ? e.message : 'Rejected' });
+        }
+        await reload();
+      }
     } finally {
+      flushing.current = false;
       setIsSyncing(false);
-      await updateStats();
+      await reload();
     }
-  }, [syncClient, isSyncing, refreshWaypoints, updateStats]);
+  }, [userId, reload]);
 
-  // Enqueue local mutation
-  const enqueueWaypointMutation = async (
-    action: SyncMutationType,
-    waypoint: Partial<Waypoint> & { id: string }
-  ) => {
-    // 1. Enqueue to IndexedDB outbox & optimistic cache
-    await syncClient.outbox.enqueueMutation('waypoint', waypoint.id, action, waypoint);
+  const triggerSync = useCallback(async () => {
+    await flush();
+    await refresh();
+  }, [flush, refresh]);
 
-    // 2. Optimistically update React state
-    setWaypoints((prev) => {
-      if (action === 'DELETE') {
-        return prev.filter((w) => w.id !== waypoint.id);
-      }
-      const existingIdx = prev.findIndex((w) => w.id === waypoint.id);
-      if (existingIdx >= 0) {
-        const updated = [...prev];
-        updated[existingIdx] = { ...updated[existingIdx], ...waypoint } as Waypoint;
-        return updated;
-      }
-      return [waypoint as Waypoint, ...prev];
-    });
+  const send = useCallback(
+    async (command: NewCommand) => {
+      const item: OutboxItem = {
+        id: crypto.randomUUID(),
+        userId,
+        command: { ...command, id: crypto.randomUUID() },
+        state: 'queued',
+        createdAt: new Date().toISOString(),
+        seq: seq.current++,
+      };
+      await putItem(item); // saved locally before any network attempt
+      await reload();
+      if (navigator.onLine) void triggerSync();
+      return item;
+    },
+    [userId, reload, triggerSync]
+  );
 
-    await updateStats();
+  const discard = useCallback(
+    async (id: string) => {
+      await deleteItem(id);
+      await reload();
+    },
+    [reload]
+  );
 
-    // 3. If online, trigger immediate background flush
-    if (navigator.onLine) {
-      triggerSync();
-    }
-  };
+  useEffect(() => {
+    setWorkspace(null);
+    setItems([]);
+    if (!userId) return;
+    void reload().then(triggerSync);
+    const timer = window.setInterval(() => {
+      if (navigator.onLine) void triggerSync();
+    }, POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const up = () => {
+      setIsOnline(true);
+      void triggerSync();
+    };
+    const down = () => setIsOnline(false);
+    window.addEventListener('online', up);
+    window.addEventListener('offline', down);
+    return () => {
+      window.removeEventListener('online', up);
+      window.removeEventListener('offline', down);
+    };
+  }, [triggerSync]);
 
   return (
     <SyncContext.Provider
       value={{
         isOnline,
         isSyncing,
-        pendingCount,
+        pendingCount: items.filter((i) => i.state === 'queued' || i.state === 'sending').length,
+        rejected: items.filter((i) => i.state === 'rejected'),
         lastSyncedAt,
-        waypoints,
-        enqueueWaypointMutation,
+        workspace,
+        workspaceError,
+        send,
         triggerSync,
-        refreshWaypoints,
+        refresh,
+        discard,
       }}
     >
       {children}

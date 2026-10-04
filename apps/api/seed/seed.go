@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// SeedDatabase loads reference CSVs, seeds catalog items, user accounts, and creates the demo day state.
+// SeedDatabase loads reference CSVs, seeds catalog items, user accounts, without manufacturing operational orders.
 // It is protected by an advisory lock so concurrent application boots never collide.
 func SeedDatabase(ctx context.Context, pool *pgxpool.Pool, dataDir string) error {
 	// Acquire PostgreSQL advisory lock (key hash 'waypoint_seed_lock')
@@ -60,20 +60,16 @@ func SeedDatabase(ctx context.Context, pool *pgxpool.Pool, dataDir string) error
 		}
 	}
 
+	if err := verifyReferenceData(ctx, pool); err != nil {
+		return err
+	}
+
 	if err := seedCatalog(ctx, pool); err != nil {
 		return fmt.Errorf("failed to seed catalog: %w", err)
 	}
 
-	if err := seedVehicleAvailability(ctx, pool); err != nil {
-		return fmt.Errorf("failed to seed vehicle availability: %w", err)
-	}
-
 	if err := seedAccounts(ctx, pool); err != nil {
 		return fmt.Errorf("failed to seed accounts: %w", err)
-	}
-
-	if err := seedDemoDayOrders(ctx, pool); err != nil {
-		return fmt.Errorf("failed to seed demo day orders: %w", err)
 	}
 
 	slog.Info("Database seeding successfully completed!")
@@ -415,40 +411,23 @@ func seedCatalog(ctx context.Context, pool *pgxpool.Pool) error {
 	return nil
 }
 
-func seedVehicleAvailability(ctx context.Context, pool *pgxpool.Pool) error {
-	// For demo day 2026-10-05: put several vehicles in the workshop
-	// Peliyagoda: VEH-004 (reefer truck), VEH-018 (dry truck), VEH-054 (reefer van)
-	// Kandy: VEH-042 (dry truck)
-	demoDate := "2026-10-05"
-
-	// Default all available for demo date
-	_, err := pool.Exec(ctx, `
-		INSERT INTO vehicle_availability (vehicle_id, date, status)
-		SELECT vehicle_id, $1::date, 'available'
-		FROM vehicles
-		ON CONFLICT (vehicle_id, date) DO NOTHING
-	`, demoDate)
-	if err != nil {
-		return err
-	}
-
-	// Set workshop vehicles
-	workshopVehicles := []string{"VEH-004", "VEH-018", "VEH-054", "VEH-042"}
-	for _, v := range workshopVehicles {
-		_, err := pool.Exec(ctx, `
-			UPDATE vehicle_availability
-			SET status = 'in_workshop'
-			WHERE vehicle_id = $1 AND date = $2::date
-		`, v, demoDate)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+type account struct {
+	id        string
+	name      string
+	email     string
+	role      string
+	depot     *string
+	outletID  *string
+	vehicleID *string
+	pinHash   *string
 }
 
 func seedAccounts(ctx context.Context, pool *pgxpool.Pool) error {
-	defaultPass := "password123"
+	defaultPass := os.Getenv("BOOTSTRAP_PASSWORD")
+	if defaultPass == "" {
+		slog.Warn("BOOTSTRAP_PASSWORD is not set; role accounts were not created")
+		return nil
+	}
 	hash, err := auth.HashPassword(defaultPass)
 	if err != nil {
 		return err
@@ -459,16 +438,7 @@ func seedAccounts(ctx context.Context, pool *pgxpool.Pool) error {
 		return err
 	}
 
-	accounts := []struct {
-		id        string
-		name      string
-		email     string
-		role      string
-		depot     *string
-		outletID  *string
-		vehicleID *string
-		pinHash   *string
-	}{
+	accounts := []account{
 		{
 			id:       "00000000-0000-0000-0000-000000000001",
 			name:     "Peliyagoda Central Dispatcher",
@@ -486,34 +456,56 @@ func seedAccounts(ctx context.Context, pool *pgxpool.Pool) error {
 			outletID: nil, vehicleID: nil, pinHash: &pinHash,
 		},
 		{
-			id:       "00000000-0000-0000-0000-000000000003",
-			name:     "Sunil Perera (Lead Reefer Driver)",
-			email:    "driver@waypoint.local",
-			role:     "driver",
-			depot:    strPtr("Peliyagoda"),
-			outletID: nil,
-			vehicleID: strPtr("VEH-001"), // Bound to lowest-numbered Peliyagoda reefer truck!
-			pinHash:  nil,
+			id:        "00000000-0000-0000-0000-000000000003",
+			name:      "Driver - VEH035 (Peliyagoda reefer van)",
+			email:     "driver@waypoint.local",
+			role:      "driver",
+			depot:     strPtr("Peliyagoda"),
+			outletID:  nil,
+			vehicleID: strPtr("VEH035"), // official Peliyagoda reefer van: can carry chilled goods and reach van-only outlets
+			pinHash:   nil,
 		},
 		{
-			id:       "00000000-0000-0000-0000-000000000004",
-			name:     "Store Manager - Fresh Colombo Fort",
-			email:    "store@waypoint.local",
-			role:     "store_manager",
-			depot:    strPtr("Peliyagoda"),
-			outletID: strPtr("OUT-FRESH-001"), // Served in demo plan
+			id:        "00000000-0000-0000-0000-000000000004",
+			name:      "Store Manager - OUT001 Fresh Colombo (van-only)",
+			email:     "store@waypoint.local",
+			role:      "store_manager",
+			depot:     strPtr("Peliyagoda"),
+			outletID:  strPtr("OUT001"), // van-only Fresh outlet, window 05:00-07:30
 			vehicleID: nil, pinHash: nil,
 		},
 		{
-			id:       "00000000-0000-0000-0000-000000000005",
-			name:     "Store Manager - Fresh Kalutara South",
-			email:    "store.deferred@waypoint.local",
-			role:     "store_manager",
-			depot:    strPtr("Peliyagoda"),
-			outletID: strPtr("OUT-FRESH-055"), // Deferred in demo plan due to capacity limit
+			id:        "00000000-0000-0000-0000-000000000005",
+			name:      "Store Manager - OUT055 Fresh Galle",
+			email:     "store.deferred@waypoint.local",
+			role:      "store_manager",
+			depot:     strPtr("Peliyagoda"),
+			outletID:  strPtr("OUT055"), // Fresh Galle, window 05:00-07:30
 			vehicleID: nil, pinHash: nil,
 		},
 	}
+
+	// One store-manager account per remaining outlet, so a judge can act as the store at any stop.
+	orows, err := pool.Query(ctx, `SELECT outlet_id, depot FROM outlets WHERE outlet_id NOT IN ('OUT001','OUT055') ORDER BY outlet_id`)
+	if err != nil {
+		return err
+	}
+	for orows.Next() {
+		var oid, depot string
+		if err := orows.Scan(&oid, &depot); err != nil {
+			orows.Close()
+			return err
+		}
+		accounts = append(accounts, account{
+			id:       uuid.NewMD5(uuid.NameSpaceURL, []byte("waypoint-store-"+oid)).String(),
+			name:     "Store Manager - " + oid,
+			email:    "store." + strings.ToLower(oid) + "@waypoint.local",
+			role:     "store_manager",
+			depot:    strPtr(depot),
+			outletID: strPtr(oid),
+		})
+	}
+	orows.Close()
 
 	for _, a := range accounts {
 		uID := uuid.MustParse(a.id)
@@ -521,14 +513,8 @@ func seedAccounts(ctx context.Context, pool *pgxpool.Pool) error {
 			INSERT INTO users (id, name, email, password_hash, pin_hash, role, depot, outlet_id, vehicle_id, locale, active, created_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'en', true, CURRENT_TIMESTAMP)
 			ON CONFLICT (id) DO UPDATE SET
-				name = EXCLUDED.name,
-				email = EXCLUDED.email,
-				password_hash = EXCLUDED.password_hash,
-				pin_hash = EXCLUDED.pin_hash,
-				role = EXCLUDED.role,
-				depot = EXCLUDED.depot,
-				outlet_id = EXCLUDED.outlet_id,
-				vehicle_id = EXCLUDED.vehicle_id
+				name = EXCLUDED.name, email = EXCLUDED.email, role = EXCLUDED.role,
+				depot = EXCLUDED.depot, outlet_id = EXCLUDED.outlet_id, vehicle_id = EXCLUDED.vehicle_id
 		`, uID, a.name, a.email, hash, a.pinHash, a.role, a.depot, a.outletID, a.vehicleID)
 		if err != nil {
 			return fmt.Errorf("failed to seed account %s: %w", a.email, err)
@@ -537,156 +523,31 @@ func seedAccounts(ctx context.Context, pool *pgxpool.Pool) error {
 	return nil
 }
 
-func seedDemoDayOrders(ctx context.Context, pool *pgxpool.Pool) error {
-	demoDate := "2026-10-05"
-	creatorID := uuid.MustParse("00000000-0000-0000-0000-000000000004")
-
-	// Set skip streaks for several outlets to show skip streak priority
-	_, _ = pool.Exec(ctx, `
-		INSERT INTO outlet_service_state (outlet_id, last_served_date, skip_streak)
-		VALUES ('OUT-FRESH-001', '2026-10-03', 0),
-		       ('OUT-FRESH-002', '2026-10-02', 1),
-		       ('OUT-FRESH-031', '2026-10-01', 2)
-		ON CONFLICT (outlet_id) DO UPDATE SET
-			skip_streak = EXCLUDED.skip_streak,
-			last_served_date = EXCLUDED.last_served_date
-	`)
-
-	// Let's create orders for demo date exceeding capacity at Peliyagoda
-	// 1. OUT-FRESH-001: 2 same-day orders (ambient + chilled)
-	if err := createDemoOrder(ctx, pool, "01923c8a-0000-7000-8000-000000000001", "ORD-20261005-001", "OUT-FRESH-001", "Fresh", demoDate, "chilled",
-		[]lineItem{{"SKU-FRESH-MILK-1L", 100}, {"SKU-FRESH-YOGURT-80G", 200}}, creatorID); err != nil {
-		return err
-	}
-	if err := createDemoOrder(ctx, pool, "01923c8a-0000-7000-8000-000000000002", "ORD-20261005-002", "OUT-FRESH-001", "Fresh", demoDate, "ambient",
-		[]lineItem{{"SKU-FRESH-RICE-5KG", 50}, {"SKU-FRESH-EGGS-30", 30}}, creatorID); err != nil {
-		return err
-	}
-
-	// 2. Orders matching Golden Test A: Fresh trip to Gampaha, 3 orders (2 rear_dock: OUT-FRESH-032, OUT-FRESH-034; 1 street: OUT-FRESH-031)
-	if err := createDemoOrder(ctx, pool, "01923c8a-0000-7000-8000-000000000011", "ORD-20261005-011", "OUT-FRESH-032", "Fresh", demoDate, "chilled",
-		[]lineItem{{"SKU-FRESH-MILK-1L", 80}}, creatorID); err != nil {
-		return err
-	}
-	if err := createDemoOrder(ctx, pool, "01923c8a-0000-7000-8000-000000000012", "ORD-20261005-012", "OUT-FRESH-034", "Fresh", demoDate, "chilled",
-		[]lineItem{{"SKU-FRESH-CHICKEN-KG", 60}}, creatorID); err != nil {
-		return err
-	}
-	if err := createDemoOrder(ctx, pool, "01923c8a-0000-7000-8000-000000000013", "ORD-20261005-013", "OUT-FRESH-031", "Fresh", demoDate, "chilled",
-		[]lineItem{{"SKU-FRESH-MILK-1L", 90}}, creatorID); err != nil {
-		return err
-	}
-
-	// 3. Orders matching Golden Test B: second Fresh trip to Colombo, 4 street stops (OUT-FRESH-001, OUT-FRESH-004, OUT-FRESH-005, OUT-FRESH-007)
-	if err := createDemoOrder(ctx, pool, "01923c8a-0000-7000-8000-000000000021", "ORD-20261005-021", "OUT-FRESH-004", "Fresh", demoDate, "chilled",
-		[]lineItem{{"SKU-FRESH-MILK-1L", 120}}, creatorID); err != nil {
-		return err
-	}
-	if err := createDemoOrder(ctx, pool, "01923c8a-0000-7000-8000-000000000022", "ORD-20261005-022", "OUT-FRESH-005", "Fresh", demoDate, "chilled",
-		[]lineItem{{"SKU-FRESH-CHICKEN-KG", 80}}, creatorID); err != nil {
-		return err
-	}
-	if err := createDemoOrder(ctx, pool, "01923c8a-0000-7000-8000-000000000023", "ORD-20261005-023", "OUT-FRESH-007", "Fresh", demoDate, "chilled",
-		[]lineItem{{"SKU-FRESH-MILK-1L", 100}}, creatorID); err != nil {
-		return err
-	}
-
-	// 4. Style & Tech orders in Colombo & Gampaha
-	if err := createDemoOrder(ctx, pool, "01923c8a-0000-7000-8000-000000000031", "ORD-20261005-031", "OUT-STYLE-001", "Style", demoDate, "ambient",
-		[]lineItem{{"SKU-STYLE-SHIRT-M", 80}, {"SKU-STYLE-SAREE-SILK", 40}}, creatorID); err != nil {
-		return err
-	}
-	if err := createDemoOrder(ctx, pool, "01923c8a-0000-7000-8000-000000000032", "ORD-20261005-032", "OUT-TECH-001", "Tech", demoDate, "ambient",
-		[]lineItem{{"SKU-TECH-SMART-TV", 15}, {"SKU-TECH-LAPTOP-BOX", 25}}, creatorID); err != nil {
-		return err
-	}
-
-	// 5. Heavy chilled demand to exceed Peliyagoda reefer capacity (producing expected deferrals)
-	for i := 40; i <= 55; i++ {
-		ordID := fmt.Sprintf("01923c8a-0000-7000-8000-%012d", i)
-		ordRef := fmt.Sprintf("ORD-20261005-%03d", i)
-		outID := fmt.Sprintf("OUT-FRESH-%03d", i)
-		_ = createDemoOrder(ctx, pool, ordID, ordRef, outID, "Fresh", demoDate, "chilled",
-			[]lineItem{{"SKU-FRESH-MILK-1L", 250}, {"SKU-FRESH-CHICKEN-KG", 150}}, creatorID)
-	}
-
-	return nil
-}
-
-type lineItem struct {
-	sku string
-	qty int
-}
-
-func createDemoOrder(ctx context.Context, pool *pgxpool.Pool, idStr, ref, outletID, brand, dateStr, temp string, items []lineItem, creatorID uuid.UUID) error {
-	ordID := uuid.MustParse(idStr)
-
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	var totalUnits int
-	var totalWeightG int64
-	var totalVolumeUl int64
-
-	type lineCalc struct {
-		lineNo   int
-		sku      string
-		qty      int
-		weightG  int64
-		volumeUl int64
-	}
-	var lines []lineCalc
-
-	for i, it := range items {
-		var uWeight float64
-		var uVolume float64
-		err := tx.QueryRow(ctx, `SELECT unit_weight_kg, unit_volume_m3 FROM catalog_items WHERE sku = $1`, it.sku).Scan(&uWeight, &uVolume)
-		if err != nil {
-			return fmt.Errorf("catalog item %s not found: %w", it.sku, err)
-		}
-
-		wG := int64(uWeight * 1000 * float64(it.qty))
-		vUl := int64(uVolume * 1000000000 * float64(it.qty))
-
-		totalUnits += it.qty
-		totalWeightG += wG
-		totalVolumeUl += vUl
-
-		lines = append(lines, lineCalc{
-			lineNo:   i + 1,
-			sku:      it.sku,
-			qty:      it.qty,
-			weightG:  wG,
-			volumeUl: vUl,
-		})
-	}
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO orders (id, ref, outlet_id, brand, delivery_date, temp_requirement, status, total_units, total_weight_g, total_volume_ul, placed_at, confirmed_at, is_late, source, version, created_by)
-		VALUES ($1, $2, $3, $4, $5::date, $6, 'queued', $7, $8, $9, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, false, 'app', 1, $10)
-		ON CONFLICT (id) DO NOTHING
-	`, ordID, ref, outletID, brand, dateStr, temp, totalUnits, totalWeightG, totalVolumeUl, creatorID)
-	if err != nil {
-		return err
-	}
-
-	for _, l := range lines {
-		_, err = tx.Exec(ctx, `
-			INSERT INTO order_lines (order_id, line_no, sku, qty, weight_g, volume_ul)
-			VALUES ($1, $2, $3, $4, $5, $6)
-			ON CONFLICT (order_id, line_no) DO NOTHING
-		`, ordID, l.lineNo, l.sku, l.qty, l.weightG, l.volumeUl)
-		if err != nil {
-			return err
-		}
-	}
-
-	return tx.Commit(ctx)
-}
-
 func strPtr(s string) *string {
 	return &s
+}
+
+// verifyReferenceData fails the boot when the database does not hold the official challenge master data.
+func verifyReferenceData(ctx context.Context, pool *pgxpool.Pool) error {
+	checks := []struct {
+		name, query string
+		want        int
+	}{
+		{"outlets", `SELECT count(*) FROM outlets`, 120},
+		{"vehicles", `SELECT count(*) FROM vehicles`, 60},
+		{"calendar days", `SELECT count(*) FROM calendar_days`, 910},
+		{"synthetic outlets", `SELECT count(*) FROM outlets WHERE outlet_id !~ '^OUT[0-9]{3}$'`, 0},
+		{"synthetic vehicles", `SELECT count(*) FROM vehicles WHERE vehicle_id !~ '^VEH[0-9]{3}$'`, 0},
+		{"districts without travel data", `SELECT count(DISTINCT o.district) FROM outlets o LEFT JOIN district_travel d ON d.district=o.district WHERE d.district IS NULL`, 0},
+	}
+	for _, c := range checks {
+		var got int
+		if err := pool.QueryRow(ctx, c.query).Scan(&got); err != nil {
+			return fmt.Errorf("verify %s: %w", c.name, err)
+		}
+		if got != c.want {
+			return fmt.Errorf("reference data check failed for %s: got %d, want %d", c.name, got, c.want)
+		}
+	}
+	return nil
 }

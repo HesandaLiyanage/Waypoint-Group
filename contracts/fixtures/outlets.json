@@ -1,6 +1,6 @@
 [
   {
-    "outlet_id": "OUT-FRESH-001",
+    "outlet_id": "OUT001",
     "brand": "Fresh",
     "district": "Colombo",
     "depot": "Peliyagoda",
@@ -11,7 +11,7 @@
     "window_close_time": "08:00:00"
   },
   {
-    "outlet_id": "OUT-FRESH-002",
+    "outlet_id": "OUT002",
     "brand": "Fresh",
     "district": "Gampaha",
     "depot": "Peliyagoda",

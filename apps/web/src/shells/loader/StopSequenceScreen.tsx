@@ -35,7 +35,7 @@ export function StopSequenceScreen({ trip, sync, expandedSeq, onExpand, onBack, 
     <>
       <div className="ld-body">
         <button type="button" className="ld-back" onClick={onBack}><Icon name="back" size={20} /> All trips</button>
-        <p className="ld-eyebrow">Trip · {trip.id} · {trip.district} · {trip.stops.length} stops</p>
+        <p className="ld-eyebrow">Trip · {trip.label} · {trip.district} · {trip.stops.length} stops</p>
         <h1 className="ld-title">Load in this order</h1>
         <p className="ld-sub">Stop {trip.stops.length} goes on first, so it comes off last.</p>
 

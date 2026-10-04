@@ -1,7 +1,7 @@
 {
   "date": "2026-10-05",
   "depot": "Peliyagoda",
-  "vehicle_id": "VEH-001",
+  "vehicle_id": "VEH035",
   "plan_id": "01923c8a-1000-7000-8000-000000000001",
   "plan_version": 1,
   "trips": [
@@ -13,7 +13,7 @@
         {
           "stop_id": "01923c8a-3000-7000-8000-000000000001",
           "seq": 1,
-          "outlet_id": "OUT-FRESH-001",
+          "outlet_id": "OUT001",
           "brand": "Fresh",
           "district": "Colombo",
           "dock_type": "street",

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/tz"
+
 	"github.com/google/uuid"
 )
 
@@ -105,12 +107,12 @@ type PlanOrder struct {
 }
 
 type PlanStop struct {
-	ID                  uuid.UUID
-	TripID              uuid.UUID
-	Order               PlanOrder
-	Seq                 int
-	WindowOverrideCode  *string
-	WindowOverrideNote  *string
+	ID                 uuid.UUID
+	TripID             uuid.UUID
+	Order              PlanOrder
+	Seq                int
+	WindowOverrideCode *string
+	WindowOverrideNote *string
 }
 
 type PlanTrip struct {
@@ -379,7 +381,7 @@ func Validate(plan *PlanData, ref RefData, fuelRemainingMl map[string]int64) []V
 
 		// Stop window checks (Section 5.7)
 		if len(stopTimingInputs) > 0 {
-			baseDate, _ := time.Parse("2006-01-02", plan.PlanDate)
+			baseDate, _ := time.ParseInLocation("2006-01-02", plan.PlanDate, tz.Colombo)
 			etaResults, err := CalculateStopETAs(baseDate, trip.PlannedDepart, dt.DepotToDistrictFreeflowMin, dt.InterStopFreeflowMin, stopTimingInputs)
 			if err == nil {
 				for i, eta := range etaResults {

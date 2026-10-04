@@ -45,7 +45,7 @@ export function FlagShortageScreen({ trip, stopSeq, stopOutlet, stopName, item, 
 
         <div className="ld-card ld-flag-item">
           <div>
-            <p className="ld-eyebrow">{trip.id} · Stop {stopSeq} · {stopOutlet} {stopName}</p>
+            <p className="ld-eyebrow">{trip.label} · Stop {stopSeq} · {stopOutlet} {stopName}</p>
             <strong>{item.name}</strong>
             <small>Expected {item.expected} {item.unit}</small>
           </div>

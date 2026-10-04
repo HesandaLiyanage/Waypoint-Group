@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -74,14 +75,23 @@ func main() {
 		seedDataDir = "db/seed/data"
 	}
 	if err := seed.SeedDatabase(ctx, pool, seedDataDir); err != nil {
-		slog.Warn("seed database warning", "error", err)
+		slog.Error("reference data initialization failed", "error", err)
+		os.Exit(1)
 	} else {
 		slog.Info("Database seed verified and loaded")
 	}
+	if err := seed.SeedDemoDay(ctx, pool); err != nil {
+		slog.Error("demo delivery day failed", "error", err)
+		os.Exit(1)
+	}
 
 	// Domain components
-	initialTime, _ := time.Parse(time.RFC3339, "2026-10-05T03:00:00+05:30")
-	demoClock := clock.NewDemoClock(&initialTime)
+	initialTime, err := time.Parse(time.RFC3339, cfg.BusinessNow)
+	if err != nil {
+		slog.Error("BUSINESS_NOW must be RFC3339", "value", cfg.BusinessNow, "error", err)
+		os.Exit(1)
+	}
+	businessClock := clock.NewDemoClock(&initialTime)
 	tokens := auth.NewTokenService(cfg.JWTSecret)
 	outboxWriter := outbox.NewWriter()
 
@@ -91,13 +101,13 @@ func main() {
 
 	sseHub := sse.NewHub(pool)
 	etaPred := eta.NewHTTPPredictor(cfg.MLServiceURL)
-	orderingSvc := ordering.NewService(pool, demoClock)
-	syncSvc := syncpkg.NewSyncService(pool, demoClock, outboxWriter, sseHub)
+	orderingSvc := ordering.NewService(pool, businessClock)
+	syncSvc := syncpkg.NewSyncService(pool, businessClock, outboxWriter, sseHub)
 
 	srv := server.NewServer(
 		pool,
 		cfg,
-		demoClock,
+		businessClock,
 		tokens,
 		orderingSvc,
 		syncSvc,
@@ -114,7 +124,15 @@ func main() {
 				httpx.WriteProblem(w, r, http.StatusBadRequest, "BAD_REQUEST", "Bad Request", err.Error(), nil)
 			},
 			ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-				httpx.WriteProblem(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal Server Error", err.Error(), nil)
+				slog.Error("request failed", "method", r.Method, "path", r.URL.Path, "error", err)
+				switch {
+				case errors.Is(err, server.ErrUnauthenticated):
+					httpx.WriteProblem(w, r, http.StatusUnauthorized, "UNAUTHENTICATED", "Unauthorized", err.Error(), nil)
+				case errors.Is(err, server.ErrForbidden):
+					httpx.WriteProblem(w, r, http.StatusForbidden, "FORBIDDEN", "Forbidden", err.Error(), nil)
+				default:
+					httpx.WriteProblem(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal Server Error", err.Error(), nil)
+				}
 			},
 		},
 	)
@@ -140,6 +158,7 @@ func main() {
 
 	// Mount contract-generated OpenAPI routes under /api/v1
 	api.HandlerFromMuxWithBaseURL(strictHandler, mux, "/api/v1")
+	srv.RegisterWorkflow(mux)
 
 	// Middleware pipeline
 	corsHandler := func(next http.Handler) http.Handler {
@@ -177,9 +196,11 @@ func main() {
 					httpx.MaxBodyBytesMiddleware(cfg.MaxRequestBodyBytes)(
 						httpx.LoggingMiddleware(
 							tokens.Middleware(
-								limiter.Middleware(rateLimitKeyFunc, 1)(
-									idempotency.Middleware(idempStore)(
-										mux,
+								auth.RequireUser(publicPath,
+									limiter.Middleware(rateLimitKeyFunc, 1)(
+										idempotency.Middleware(idempStore)(
+											mux,
+										),
 									),
 								),
 							),
@@ -220,4 +241,15 @@ func main() {
 		slog.Error("server shutdown failed", "error", err)
 	}
 	slog.Info("Server gracefully stopped")
+}
+
+// publicPath lists the only endpoints reachable without a session.
+func publicPath(p string) bool {
+	switch p {
+	case "/healthz", "/readyz", "/api/v1/healthz", "/api/v1/readyz",
+		"/api/v1/auth/login", "/api/v1/auth/pin-login", "/api/v1/auth/refresh",
+		"/api/v1/auth/facilities", "/api/v1/auth/register", "/api/v1/auth/login-outlet":
+		return true
+	}
+	return false
 }

@@ -46,7 +46,7 @@ export function TripsScreen({ trips, sealed, planState, lastSynced, activeTrip, 
                   <Badge tone={statusTone[st]}>{statusLabel[st]}</Badge>
                 </span>
                 <span className="ld-trip-line"><span>{t.district} · {t.stops.length} stops</span><strong>Departs {t.depart}</strong></span>
-                <span className="ld-trip-meta">{t.vehicle} · {t.bay} · {t.extra}</span>
+                <span className="ld-trip-meta">{t.vehicle} · {t.extra}</span>
                 <span className="ld-progress-label"><span>{c.loaded} of {c.total} items loaded</span><span>{pct}%</span></span>
                 <span className="ld-bar"><span style={{ width: `${pct}%` }} /></span>
                 <span className="ld-chips">

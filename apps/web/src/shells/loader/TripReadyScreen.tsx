@@ -33,7 +33,7 @@ export function TripReadyScreen({ trip, planState, sealed, queued, onReload, onM
             {planOpen && <button type="button" className="ld-banner-btn" onClick={onReload}>Reload list</button>}
           </div>
         )}
-        <p className="ld-eyebrow">{trip.id} · {trip.district} · Departs {trip.depart}</p>
+        <p className="ld-eyebrow">{trip.label} · {trip.district} · Departs {trip.depart}</p>
         <h1 className="ld-title">{sealed ? 'Trip sealed' : 'Ready to go?'}</h1>
 
         <div className="ld-tiles">
