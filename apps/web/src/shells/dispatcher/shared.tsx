@@ -1,0 +1,5 @@
+import type { ReactNode } from 'react';
+export const path = (page: string) => `#/dispatcher/${page}`;
+export function PageLink({ to, children, secondary=false }: {to:string;children:ReactNode;secondary?:boolean}) { return <a className={`wp-button wp-button--${secondary?'secondary':'primary'} dp-link`} href={path(to)}>{children}</a>; }
+export function Table({ headings, children, label }: {headings:string[];children:ReactNode;label:string}) { return <div className="wp-table-scroll" tabIndex={0} role="region" aria-label={label}><table className="wp-table"><thead><tr>{headings.map(h=><th key={h} scope="col">{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
+export function exportCsv(name:string, rows:(string|number)[][]) { const csv=rows.map(row=>row.map(value=>`"${String(value).replace(/^[=+@-]/,"'$&").replaceAll('"','""')}"`).join(',')).join('\r\n');const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000); }

@@ -1,4 +1,4 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/components/preview/main.tsx", "src/vite-env.d.ts"]
+  "include": ["src/components/preview/main.tsx", "src/shells/dispatcher/main.tsx", "src/vite-env.d.ts"]
 }
