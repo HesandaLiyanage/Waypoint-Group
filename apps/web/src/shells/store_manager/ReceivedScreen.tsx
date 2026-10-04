@@ -1,3 +1,4 @@
+import { useAuth } from '../../context/AuthContext';
 import { Button, Card } from '../../components/common';
 import { Icon } from './icons';
 import { go } from './navigation';
@@ -5,6 +6,7 @@ import type { ReceiptResult } from './receiptTypes';
 
 // Full receipt page ("Order Received & Confirmed" in the Figma set).
 export function ReceivedScreen({ r }: { r: ReceiptResult | null }) {
+  const { currentUser } = useAuth();
   if (!r) return <div className="sm-page sm-narrow"><Card className="sm-empty"><h1 className="sm-h1-md">No receipt yet</h1><Button onClick={() => go('inbound')}>Go to inbound consignments</Button></Card></div>;
   return (
     <div className="sm-page sm-narrow">
@@ -16,10 +18,8 @@ export function ReceivedScreen({ r }: { r: ReceiptResult | null }) {
         <div className="sm-recgrid">
           <div><small>Order reference</small><strong>{r.orderId} <span className="sm-ver">Verified</span></strong><span className="sm-muted">Store Inbound Delivery Manifest</span></div>
           <div><small>Confirmation timestamp</small><strong>Confirmed today at {r.at}</strong><span className="sm-muted">Central Distribution Ledger (UTC+05:30)</span></div>
-          <div><small>Receiving outlet</small><strong>OUT047 — Waypoint Fresh</strong><span className="sm-muted">Dock Bay 2 • Ambient &amp; Cold Vaults</span></div>
-          <div><small>Cold chain brand</small><strong>Waypoint Fresh</strong><span className="sm-muted">Direct Dispatch • Fleet Route R-14</span></div>
+          <div><small>Receiving outlet</small><strong>{currentUser?.outlet_id} — Waypoint Fresh</strong></div>
         </div>
-        <p className="sm-muted"><Icon name="shield" size={16} /> Digital chain of custody sealed · Temp compliance +3.1°C · Sync hash #88F4-0092</p>
         <Button className="sm-wide" onClick={() => go('home')}><Icon name="archive" /> Back to home</Button>
       </Card>
       <div className="sm-three">

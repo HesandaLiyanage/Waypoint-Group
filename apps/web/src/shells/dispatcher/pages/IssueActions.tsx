@@ -8,7 +8,16 @@ const guidance:Record<Instruction['action'],string>={
   reattempt:'Request a revised sequence only after checking remaining outlet windows, travel time, fuel and load access. A loaded vehicle cannot be freely rearranged. Keep this pending until a feasible revision is confirmed.',
   return:'If no feasible unloading or reattempt is available, coordinate return of the affected goods and review the next operating run with the store. Do not record delivery or receipt; the driver records the actual outcome.',
 };
+function ShortfallActions({issue,dispatch}:{issue:IssueRow;dispatch:Dispatch<Action>}) {
+  const [note,setNote]=useState('');
+  if(issue.status==='resolved')return <><h2>Loading shortfall accepted</h2><AlertBanner tone="success" title="The loader can seal this trip">{issue.outcome}</AlertBanner></>;
+  return <><h2>Loading shortfall</h2><p className="wp-description">{issue.note}</p>
+    <AlertBanner tone="warning" title="The trip cannot be sealed until you decide">Accept the shortfall to let the vehicle leave short, or tell the loader to correct it and check the line again.</AlertBanner>
+    <div className="dp-form-stack"><TextField label="Decision and impact on the outlet" value={note} onChange={e=>setNote(e.target.value)} hint="Record why this is acceptable (10+ characters)."/>
+      <Button disabled={note.trim().length<10||!issue.stopId||issue.lineNo==null} onClick={()=>{if(issue.stopId&&issue.lineNo!=null)dispatch({type:'accept_shortfall',stopId:issue.stopId,lineNo:issue.lineNo,note:note.trim()});}}>Accept shortfall</Button></div></>;
+}
 export function IssueActions({issue,dispatch}:{issue:IssueRow;dispatch:Dispatch<Action>}) {
+  if(issue.kind==='load_shortfall')return <ShortfallActions issue={issue} dispatch={dispatch}/>;
   const resolved=issue.status==='resolved',awaiting=issue.status==='ack'&&!!issue.instruction;
   const [action,setAction]=useState<Instruction['action']>('alternate'),[note,setNote]=useState(''),[reviewTime,setReviewTime]=useState('06:25'),[coordinated,setCoordinated]=useState(false),[outcome,setOutcome]=useState(''),[verified,setVerified]=useState(false),[confirm,setConfirm]=useState(false);
   const timeValid=/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(reviewTime)&&reviewTime<'23:59';

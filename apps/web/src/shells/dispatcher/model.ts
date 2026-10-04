@@ -42,7 +42,7 @@ export type Trip = {
 };
 export type StopRow = { id: string; orderUid: string; seq: number; eta: string; status: string; windowClose: string };
 export type IssueRow = {
-  id: string; kind: string; tripId: string | null; stopId: string | null; orderUid: string | null;
+  id: string; kind: string; lineNo: number | null; tripId: string | null; stopId: string | null; orderUid: string | null;
   status: 'open' | 'ack' | 'resolved'; note: string; raisedRole: string; instruction: { note: string } | null; outcome: string;
 };
 export type Warning = { order: Order; reason: string };
@@ -75,6 +75,7 @@ export type Action =
   | { type: 'deferral'; id: string; reason: string; nextDate: string }
   | { type: 'defer'; id: string; reason: string; nextDate: string; note: string }
   | { type: 'review'; id: string; note: string; accepted: boolean }
+  | { type: 'accept_shortfall'; stopId: string; lineNo: number; note: string }
   | { type: 'ack'; issueId: string }
   | { type: 'instruct'; issueId: string; instruction: Instruction; coordinated: boolean }
   | { type: 'resolve'; issueId: string; note: string; confirmed?: boolean }

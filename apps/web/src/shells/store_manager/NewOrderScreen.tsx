@@ -66,7 +66,7 @@ export function NewOrderScreen({ onSubmitted }: { onSubmitted: (ref: string, ite
           <SelectField label="Select brand item" value={itemId} onChange={(e) => setItemId(e.target.value)}>
             {catalog.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </SelectField>
-          <p className="sm-hint">All Fresh dairy & produce shipments are chilled at -2°C to 4°C throughout transport.</p>
+          <p className="sm-hint">Chilled items travel only on refrigerated vehicles.</p>
 
           <div className="sm-qty-head"><span className="sm-label">Quantity (units)</span><span className="sm-hint">Max single dispatch: 50 crates</span></div>
           <div className="sm-qty">
@@ -103,7 +103,7 @@ export function NewOrderScreen({ onSubmitted }: { onSubmitted: (ref: string, ite
             <ol>
               <li><span className="on">1</span><div><strong>Order entry</strong><small>Confirmed by DC staging controller</small></div></li>
               <li><span>2</span><div><strong>4:00 PM order cutoff</strong><small>Automatic route consolidation</small></div></li>
-              <li><span>3</span><div><strong>Dock inbound delivery</strong><small>Arrival & temp integrity check at OUT047</small></div></li>
+              <li><span>3</span><div><strong>Dock inbound delivery</strong><small>Driver arrives, you confirm what was received</small></div></li>
             </ol>
           </Card>
         </aside>

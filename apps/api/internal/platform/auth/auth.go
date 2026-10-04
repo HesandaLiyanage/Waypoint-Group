@@ -61,7 +61,7 @@ type TokenService struct {
 func NewTokenService(jwtSecret string) *TokenService {
 	return &TokenService{
 		jwtSecret: []byte(jwtSecret),
-		accessTTL: 15 * time.Minute,
+		accessTTL: 12 * time.Hour, // one working shift: /auth/refresh is not implemented, so a short token would sign people out mid-run
 	}
 }
 
