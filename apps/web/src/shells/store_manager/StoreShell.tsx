@@ -57,7 +57,7 @@ export function StoreShell() {
   const open = () => go('receipt');
   return (
     <div className="sm-root">
-      {route === 'home' && <HomeScreen notices={notices} dryStatus="confirmed" />}
+      {route === 'home' && <HomeScreen notices={notices} items={items} />}
       {route === 'new-order' && <NewOrderScreen onSubmitted={(ref, name, qty, late) => { setNotices((n) => [{ id: ref, icon: 'snow', title: `Order ${ref} submitted`, body: `${qty} units of ${name}${late ? ' — joins the following run (after 4 PM cutoff)' : ' — planned at the 4 PM cutoff'}.`, ago: 'just now', unread: true }, ...n]); void refresh(); }} />}
       {route === 'inbound' && <InboundScreen items={items} selectedId={selectedId} onSelect={setSelectedId} onConfirmReceipt={open} />}
       {route === 'deferral' && <DeferralScreen items={items} escalated={escalated} onEscalate={() => { setEscalated(true); setNotices((n) => [{ id: `e-${Date.now()}`, icon: 'bolt', title: 'Escalation noted on this screen only', body: 'Contact dispatch directly: escalation is not sent to the server yet.', ago: 'just now', unread: true }, ...n]); }} onSelect={setSelectedId} />}

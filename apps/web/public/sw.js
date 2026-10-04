@@ -1,46 +1,31 @@
-const CACHE_NAME = 'waypoint-v1';
-const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest'
-];
+// Keeps the app shell available offline without ever serving a stale build:
+// pages are fetched from the network first, and the cache is only the fallback.
+const CACHE_NAME = 'waypoint-v2';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(['/', '/index.html', '/manifest.webmanifest'])));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      );
-    })
-  );
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))));
   self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  // Let API requests pass through to network or sync-core outbox
-  if (event.request.url.includes('/api/')) {
-    return;
-  }
+  const request = event.request;
+  // API calls and anything that is not a plain GET go straight to the network.
+  if (request.method !== 'GET' || request.url.includes('/api/')) return;
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).catch(() => {
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
+    fetch(request)
+      .then((response) => {
+        if (response.ok && (request.mode === 'navigate' || new URL(request.url).pathname === '/')) {
+          const copy = response.clone();
+          void caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
         }
-      });
-    })
+        return response;
+      })
+      .catch(() => caches.match(request).then((hit) => hit || (request.mode === 'navigate' ? caches.match('/index.html') : undefined)))
   );
 });

@@ -41,8 +41,8 @@ func Load() (*Config, error) {
 		FreshDepartDefault:     getEnv("PLAN_FRESH_DEPART_DEFAULT", "03:30"),
 		StyleTechDepartDefault: getEnv("PLAN_STYLETECH_DEPART_DEFAULT", "07:00"),
 		ReloadBufferMin:        getEnvInt("RELOAD_BUFFER_MIN", 15),
-		MaxRequestBodyBytes:    int64(getEnvInt("MAX_REQUEST_BODY_BYTES", 1024*1024)), // 1 MB
-		MaxPhotoBytes:          int64(getEnvInt("MAX_PHOTO_BYTES", 2*1024*1024)),      // 2 MB
+		MaxRequestBodyBytes:    int64(getEnvInt("MAX_REQUEST_BODY_BYTES", 4*1024*1024)), // 4 MB: room for a 2 MB photo sent as base64
+		MaxPhotoBytes:          int64(getEnvInt("MAX_PHOTO_BYTES", 2*1024*1024)),        // 2 MB
 	}
 
 	origins := getEnv("CORS_ALLOWED_ORIGINS", "*")

@@ -358,6 +358,9 @@ func (s *Server) applyCommand(ctx context.Context, tx pgx.Tx, u *auth.AuthUser, 
 		if err := exec(`UPDATE load_checks SET acknowledged_by=$1,acknowledged_at=now(),acknowledgment_note=$2 WHERE id=(SELECT id FROM load_checks WHERE stop_id=$3 AND line_no=$4 ORDER BY at DESC,id DESC LIMIT 1) AND status!='ok'`, u.ID, c.Note, c.StopID, c.LineNo); err != nil {
 			return nil, err
 		}
+		if err := exec(`UPDATE issues SET status='resolved',resolved_at=now(),detail=detail||jsonb_build_object('issue_resolve',jsonb_build_object('note',$3::text,'by',$4::text)) WHERE kind='load_shortfall' AND stop_id=$1 AND (detail->>'line_no')::int=$2 AND status<>'resolved'`, c.StopID, c.LineNo, c.Note, u.ID.String()); err != nil {
+			return nil, err
+		}
 	case "reopen":
 		if u.Role != auth.RoleDispatcher || tripStatus != "sealed" || strings.TrimSpace(c.Note) == "" {
 			return deny("Only dispatch can reopen a sealed trip with a reason")

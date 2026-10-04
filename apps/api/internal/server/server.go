@@ -27,7 +27,6 @@ import (
 	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/outbox"
 	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/sse"
 	syncpkg "github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/sync"
-	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/seed"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -188,13 +187,13 @@ func (s *Server) AuthLogin(ctx context.Context, request api.AuthLoginRequestObje
 		VALUES ($1, $2, $3, $4)
 	`, uID, familyID, tokenHash, expiresAt)
 
-	cookieHeader := fmt.Sprintf("refresh_token=%s; Path=/api/v1/auth; HttpOnly; SameSite=Strict; Secure", rawRefreshToken)
+	cookieHeader := fmt.Sprintf("refresh_token=%s; Path=/api/v1/auth; HttpOnly; SameSite=Strict", rawRefreshToken)
 
 	resp := api.AuthLogin200JSONResponse{
 		Body: api.AuthResponse{
 			AccessToken: token,
 			TokenType:   "Bearer",
-			ExpiresIn:   900,
+			ExpiresIn:   43200,
 			User: api.User{
 				Id:        uID,
 				Name:      name,
@@ -274,7 +273,7 @@ func (s *Server) AuthPinLogin(ctx context.Context, request api.AuthPinLoginReque
 	return api.AuthPinLogin200JSONResponse{
 		AccessToken: token,
 		TokenType:   "Bearer",
-		ExpiresIn:   900,
+		ExpiresIn:   43200,
 		User: api.User{
 			Id:        uID,
 			Name:      name,
@@ -2035,10 +2034,25 @@ func (s *Server) StreamEvents(ctx context.Context, request api.StreamEventsReque
 // Demo Controls
 // -------------------------------------------------------------
 
+// requireDispatcher guards the demo clock: it moves the cutoff and code expiry for everyone.
+func requireDispatcher(ctx context.Context) error {
+	u := auth.GetUser(ctx)
+	if u == nil {
+		return ErrUnauthenticated
+	}
+	if u.Role != auth.RoleDispatcher {
+		return fmt.Errorf("%w: only a dispatcher can change the demo clock", ErrForbidden)
+	}
+	return nil
+}
+
 func (s *Server) ResetDemo(ctx context.Context, request api.ResetDemoRequestObject) (api.ResetDemoResponseObject, error) {
-	_ = seed.SeedDatabase(ctx, s.pool, "db/seed/data")
+	if err := requireDispatcher(ctx); err != nil {
+		return nil, err
+	}
+	s.clk.Reset()
 	st := "reset_completed"
-	dDate := "2026-10-05"
+	dDate := s.clk.Now().Format("2006-01-02")
 	return api.ResetDemo200JSONResponse{
 		Status:   &st,
 		DemoDate: &dDate,
@@ -2046,6 +2060,9 @@ func (s *Server) ResetDemo(ctx context.Context, request api.ResetDemoRequestObje
 }
 
 func (s *Server) SetDemoClock(ctx context.Context, request api.SetDemoClockRequestObject) (api.SetDemoClockResponseObject, error) {
+	if err := requireDispatcher(ctx); err != nil {
+		return nil, err
+	}
 	s.clk.SetSimulatedNow(request.Body.SimulatedNow)
 	now := s.clk.Now()
 	return api.SetDemoClock200JSONResponse{
@@ -2054,6 +2071,9 @@ func (s *Server) SetDemoClock(ctx context.Context, request api.SetDemoClockReque
 }
 
 func (s *Server) AdvanceDemoClock(ctx context.Context, request api.AdvanceDemoClockRequestObject) (api.AdvanceDemoClockResponseObject, error) {
+	if err := requireDispatcher(ctx); err != nil {
+		return nil, err
+	}
 	s.clk.Advance(time.Duration(request.Body.Minutes) * time.Minute)
 	now := s.clk.Now()
 	return api.AdvanceDemoClock200JSONResponse{

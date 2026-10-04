@@ -100,7 +100,7 @@ export function buildState(
   const issues: IssueRow[] = ws.issues
     .filter((i: Row) => ['open', 'ack', 'resolved'].includes(i.status))
     .map((i: Row): IssueRow => ({
-      id: i.id, kind: i.kind, tripId: i.trip_id ?? null, stopId: i.stop_id ?? null, orderUid: i.order_id ?? null, status: i.status,
+      id: i.id, kind: i.kind, lineNo: i.detail?.line_no ?? null, tripId: i.trip_id ?? null, stopId: i.stop_id ?? null, orderUid: i.order_id ?? null, status: i.status,
       note: i.detail?.note ?? i.detail?.issue_instruction?.note ?? '', raisedRole: i.raised_role,
       instruction: i.detail?.issue_instruction ? { note: i.detail.issue_instruction.note } : null,
       outcome: i.detail?.issue_resolve?.note ?? '',
@@ -214,6 +214,10 @@ export function useLiveDispatch() {
             if (!state.plan) return;
             await request(`/plans/${state.plan.id}/publish`, { method: 'POST', body: '{}', headers: { 'Idempotency-Key': crypto.randomUUID(), 'If-Match': `W/"${state.plan.version}"` } });
             note('Plan published to loaders, drivers and stores.');
+            break;
+          case 'accept_shortfall':
+            await command({ action: 'accept_shortfall', stop_id: a.stopId, line_no: a.lineNo, note: a.note, plan_version: state.plan?.version });
+            note('Loading shortfall accepted; the loader can now seal the trip.');
             break;
           case 'ack': await command({ action: 'issue_ack', issue_id: a.issueId }); note('Delivery incident acknowledged.'); break;
           case 'instruct':
