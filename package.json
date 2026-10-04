@@ -1,8 +1,8 @@
 {
-  "name": "waypoint-group",
+  "name": "destroyedpixels-waypoint",
   "version": "0.1.0",
   "private": true,
-  "description": "Waypoint Group Monorepo - Modular Monolith API, ML Inference, and React PWA",
+  "description": "DestroyedPixels Waypoint Monorepo - Modular Monolith API, ML Inference, and React PWA",
   "scripts": {
     "dev": "pnpm --parallel --filter \"./apps/*\" --filter \"./packages/*\" run dev",
     "dev:web": "pnpm --filter web dev",
