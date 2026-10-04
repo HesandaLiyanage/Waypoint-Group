@@ -1,6 +1,9 @@
 package planning
 
 import (
+	"time"
+
+	"github.com/HesandaLiyanage/Waypoint-Group/apps/api/internal/platform/tz"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -50,4 +53,20 @@ func TestFuelCalculations(t *testing.T) {
 	// km_per_l = 4.5 -> liters = 62.0 / 4.5 = 13.777... L -> 13,778 mL
 	fuelMl := CalculateFuelUsageMl(25.0, 6.0, 3, 4.5)
 	assert.Equal(t, int64(13778), fuelMl)
+}
+
+func TestStopETAs_WindowsAreColomboTime(t *testing.T) {
+	// Regression: window times used to be read as UTC, letting Fresh stops arrive ~5.5h late.
+	base, _ := time.ParseInLocation("2006-01-02", "2026-06-22", tz.Colombo)
+	depart := base.Add(3*time.Hour + 30*time.Minute) // 03:30 Colombo
+	stops := []StopTimingInput{{Seq: 1, ServiceMin: 15, WindowOpenTimeStr: "05:00", WindowCloseTimeStr: "07:30"}}
+
+	onTime, err := CalculateStopETAs(base, depart, 100, 8, stops) // arrives 05:10
+	assert.NoError(t, err)
+	assert.False(t, onTime[0].IsLate)
+
+	late, err := CalculateStopETAs(base, depart, 275, 8, stops) // arrives 08:05
+	assert.NoError(t, err)
+	assert.True(t, late[0].IsLate)
+	assert.Equal(t, 35, late[0].LateMinutes)
 }
